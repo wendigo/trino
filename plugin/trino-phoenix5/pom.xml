@@ -15,7 +15,7 @@
 
     <properties>
         <air.main.basedir>${project.parent.basedir}</air.main.basedir>
-        <dep.hbase.version>2.2.6</dep.hbase.version>
+        <dep.hbase.version>2.3.0</dep.hbase.version>
     </properties>
 
     <dependencies>
@@ -86,8 +86,8 @@
 
         <dependency>
             <groupId>org.apache.phoenix</groupId>
-            <artifactId>phoenix-client-embedded-hbase-2.2</artifactId>
-            <version>5.1.2</version>
+            <artifactId>phoenix-client-embedded-hbase-2.3</artifactId>
+            <version>5.1.3-SNAPSHOT</version>
         </dependency>
 
         <!-- used by tests but also needed transitively -->
@@ -99,10 +99,6 @@
                 <exclusion>
                     <groupId>org.slf4j</groupId>
                     <artifactId>jcl-over-slf4j</artifactId>
-                </exclusion>
-                <exclusion>
-                    <groupId>org.slf4j</groupId>
-                    <artifactId>log4j-over-slf4j</artifactId>
                 </exclusion>
                 <exclusion>
                     <groupId>org.slf4j</groupId>
@@ -361,6 +357,10 @@
                         <dependency>
                             <groupId>javax.xml.bind</groupId>
                             <artifactId>jaxb-api</artifactId>
+                        </dependency>
+                        <dependency>
+                            <groupId>javax.activation</groupId>
+                            <artifactId>javax.activation-api</artifactId>
                         </dependency>
                     </ignoredDependencies>
                 </configuration>
