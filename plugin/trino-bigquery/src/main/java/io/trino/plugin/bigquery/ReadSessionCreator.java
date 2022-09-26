@@ -16,6 +16,7 @@ package io.trino.plugin.bigquery;
 import com.google.cloud.bigquery.TableDefinition;
 import com.google.cloud.bigquery.TableId;
 import com.google.cloud.bigquery.TableInfo;
+import com.google.cloud.bigquery.storage.v1.ArrowSerializationOptions;
 import com.google.cloud.bigquery.storage.v1.BigQueryReadClient;
 import com.google.cloud.bigquery.storage.v1.CreateReadSessionRequest;
 import com.google.cloud.bigquery.storage.v1.DataFormat;
@@ -32,6 +33,7 @@ import java.util.Optional;
 import static com.google.cloud.bigquery.TableDefinition.Type.SNAPSHOT;
 import static com.google.cloud.bigquery.TableDefinition.Type.TABLE;
 import static com.google.cloud.bigquery.TableDefinition.Type.VIEW;
+import static com.google.cloud.bigquery.storage.v1.ArrowSerializationOptions.CompressionCodec.ZSTD;
 import static io.trino.spi.StandardErrorCode.NOT_SUPPORTED;
 import static java.lang.String.format;
 import static java.util.stream.Collectors.toList;
@@ -71,16 +73,21 @@ public class ReadSessionCreator
         try (BigQueryReadClient bigQueryReadClient = bigQueryReadClientFactory.create(session)) {
             ReadSession.TableReadOptions.Builder readOptions = ReadSession.TableReadOptions.newBuilder()
                     .addAllSelectedFields(filteredSelectedFields);
+
             filter.ifPresent(readOptions::setRowRestriction);
+            readOptions.setArrowSerializationOptions(ArrowSerializationOptions.newBuilder()
+                    .setBufferCompression(ZSTD)
+                    .build());
 
             ReadSession readSession = bigQueryReadClient.createReadSession(
                     CreateReadSessionRequest.newBuilder()
                             .setParent("projects/" + client.getProjectId())
                             .setReadSession(ReadSession.newBuilder()
-                                    .setDataFormat(DataFormat.AVRO)
+                                    .setDataFormat(DataFormat.ARROW)
                                     .setTable(toTableResourceName(actualTable.getTableId()))
                                     .setReadOptions(readOptions))
                             .setMaxStreamCount(parallelism)
+                            .setPreferredMinStreamCount(parallelism)
                             .build());
 
             return readSession;

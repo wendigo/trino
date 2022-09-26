@@ -20,6 +20,7 @@ import com.google.cloud.bigquery.TableInfo;
 import com.google.cloud.bigquery.TableResult;
 import com.google.cloud.bigquery.storage.v1.ReadSession;
 import com.google.common.collect.ImmutableList;
+import com.google.protobuf.ByteString;
 import io.airlift.log.Logger;
 import io.airlift.units.Duration;
 import io.trino.spi.NodeManager;
@@ -36,9 +37,13 @@ import io.trino.spi.connector.FixedSplitSource;
 import io.trino.spi.connector.SchemaTableName;
 import io.trino.spi.connector.TableNotFoundException;
 import io.trino.spi.predicate.TupleDomain;
+import org.apache.arrow.vector.ipc.ReadChannel;
+import org.apache.arrow.vector.util.ByteArrayReadableSeekableByteChannel;
 
 import javax.inject.Inject;
 
+import java.io.IOException;
+import java.io.UncheckedIOException;
 import java.util.List;
 import java.util.Optional;
 import java.util.OptionalInt;
@@ -57,6 +62,7 @@ import static io.trino.spi.StandardErrorCode.NOT_SUPPORTED;
 import static java.util.Objects.requireNonNull;
 import static java.util.stream.Collectors.toList;
 import static java.util.stream.IntStream.range;
+import static org.apache.arrow.vector.ipc.message.MessageSerializer.deserializeSchema;
 
 public class BigQuerySplitManager
         implements ConnectorSplitManager
@@ -140,8 +146,19 @@ public class BigQuerySplitManager
                 .create(session, remoteTableId, projectedColumnsNames, filter, actualParallelism);
 
         return readSession.getStreamsList().stream()
-                .map(stream -> BigQuerySplit.forStream(stream.getName(), readSession.getAvroSchema().getSchema(), columns, OptionalInt.of(stream.getSerializedSize())))
+                .map(stream -> BigQuerySplit.forStream(stream.getName(), convert(readSession.getArrowSchema().getSerializedSchema()), columns, OptionalInt.of(stream.getSerializedSize())))
                 .collect(toImmutableList());
+    }
+
+    private static String convert(ByteString serializedSchema)
+    {
+        try {
+            return deserializeSchema(new ReadChannel(new ByteArrayReadableSeekableByteChannel(serializedSchema.toByteArray())))
+                    .toJson();
+        }
+        catch (IOException e) {
+            throw new UncheckedIOException(e);
+        }
     }
 
     private List<BigQuerySplit> createEmptyProjection(ConnectorSession session, TableId remoteTableId, int actualParallelism, Optional<String> filter)
