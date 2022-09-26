@@ -14,6 +14,7 @@
 package io.trino.plugin.bigquery;
 
 import com.google.api.gax.core.FixedCredentialsProvider;
+import com.google.api.gax.grpc.ChannelPoolSettings;
 import com.google.api.gax.rpc.HeaderProvider;
 import com.google.auth.Credentials;
 import com.google.cloud.bigquery.storage.v1.BigQueryReadClient;
@@ -50,13 +51,22 @@ public class BigQueryReadClientFactory
         Optional<Credentials> credentials = credentialsSupplier.getCredentials(session);
 
         try {
+            ChannelPoolSettings channelPoolSettings = ChannelPoolSettings.builder()
+                    .setInitialChannelCount(4)
+                    .setMinRpcsPerChannel(1)
+                    .setMaxRpcsPerChannel(8)
+                    .build();
+
             BigQueryReadSettings.Builder clientSettings = BigQueryReadSettings.newBuilder()
                     .setTransportChannelProvider(
                             BigQueryReadSettings.defaultGrpcTransportProviderBuilder()
                                     .setHeaderProvider(headerProvider)
+                                    .setKeepAliveWithoutCalls(true)
+                                    .setChannelPoolSettings(channelPoolSettings)
                                     .build());
             credentials.ifPresent(value ->
                     clientSettings.setCredentialsProvider(FixedCredentialsProvider.create(value)));
+
             return BigQueryReadClient.create(clientSettings.build());
         }
         catch (IOException e) {
