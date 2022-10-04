@@ -21,6 +21,8 @@ import com.google.common.util.concurrent.UncheckedExecutionException;
 import io.airlift.jmx.CacheStatsMBean;
 import io.airlift.units.Duration;
 import io.trino.collect.cache.EvictableCacheBuilder;
+import io.trino.plugin.base.expression.ConnectorExpressionRewriter;
+import io.trino.plugin.base.expression.ConnectorExpressionRule;
 import io.trino.plugin.base.session.SessionPropertiesProvider;
 import io.trino.plugin.jdbc.IdentityCacheMapping.IdentityCacheKey;
 import io.trino.spi.TrinoException;
@@ -196,9 +198,9 @@ public class CachingJdbcClient
     }
 
     @Override
-    public Optional<String> convertPredicate(ConnectorSession session, ConnectorExpression expression, Map<String, ColumnHandle> assignments)
+    public Optional<String> convertPredicate(ConnectorSession session, ConnectorExpressionRule.Scope scope, ConnectorExpression expression, ConnectorExpressionRewriter.AssignmentResolver resolver)
     {
-        return delegate.convertPredicate(session, expression, assignments);
+        return delegate.convertPredicate(session, scope, expression, resolver);
     }
 
     @Override
@@ -251,6 +253,22 @@ public class CachingJdbcClient
             JoinStatistics statistics)
     {
         return delegate.implementJoin(session, joinType, leftSource, rightSource, joinConditions, rightAssignments, leftAssignments, statistics);
+    }
+
+    @Override
+    public Optional<PreparedQuery> implementJoin(
+            ConnectorSession session,
+            JoinType joinType,
+            String leftAlias,
+            PreparedQuery leftSource,
+            Map<JdbcColumnHandle, String> leftAssignments,
+            String rightAlias,
+            PreparedQuery rightSource,
+            Map<JdbcColumnHandle, String> rightAssignments,
+            String joinCondition,
+            JoinStatistics statistics)
+    {
+        return delegate.implementJoin(session, joinType, leftAlias, leftSource, leftAssignments, rightAlias, rightSource, rightAssignments, joinCondition, statistics);
     }
 
     @Override

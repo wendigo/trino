@@ -19,11 +19,7 @@ import io.trino.spi.connector.ColumnHandle;
 import io.trino.spi.connector.ConnectorSession;
 import io.trino.spi.expression.ConnectorExpression;
 
-import java.util.Map;
 import java.util.Optional;
-
-import static com.google.common.base.Verify.verifyNotNull;
-import static java.util.Objects.requireNonNull;
 
 public interface ConnectorExpressionRule<ExpressionType extends ConnectorExpression, Result>
 {
@@ -31,20 +27,39 @@ public interface ConnectorExpressionRule<ExpressionType extends ConnectorExpress
 
     Optional<Result> rewrite(ExpressionType expression, Captures captures, RewriteContext<Result> context);
 
+    default boolean appliesTo(Scope scope)
+    {
+        return true;
+    }
+
     interface RewriteContext<Result>
     {
-        default ColumnHandle getAssignment(String name)
-        {
-            requireNonNull(name, "name is null");
-            ColumnHandle columnHandle = getAssignments().get(name);
-            verifyNotNull(columnHandle, "No assignment for %s", name);
-            return columnHandle;
-        }
-
-        Map<String, ColumnHandle> getAssignments();
-
         ConnectorSession getSession();
 
         Optional<Result> defaultRewrite(ConnectorExpression expression);
+
+        ConnectorExpressionRewriter.AssignmentResolver getResolver();
+
+        default ColumnHandle getAssignment(String name)
+        {
+            return getResolver().getAssignment(name);
+        }
+
+        default Optional<String> getRelationAlias(String name)
+        {
+            return getResolver().getRelationAlias(name);
+        }
+
+        default Scope getScope()
+        {
+            return Scope.ANY;
+        }
+    }
+
+    enum Scope
+    {
+        FILTER,
+        JOIN,
+        ANY;
     }
 }

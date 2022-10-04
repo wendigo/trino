@@ -43,9 +43,11 @@ public interface QueryBuilder
             ConnectorSession session,
             Connection connection,
             JoinType joinType,
+            String leftSourceAlias,
             PreparedQuery leftSource,
+            String rightSourceAlias,
             PreparedQuery rightSource,
-            List<JdbcJoinCondition> joinConditions,
+            String conditionExpression,
             Map<JdbcColumnHandle, String> leftAssignments,
             Map<JdbcColumnHandle, String> rightAssignments);
 

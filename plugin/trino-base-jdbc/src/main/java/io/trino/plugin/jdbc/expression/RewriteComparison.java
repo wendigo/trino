@@ -52,8 +52,8 @@ import static java.util.function.Function.identity;
 public class RewriteComparison
         implements ConnectorExpressionRule<Call, String>
 {
-    private static final Capture<ConnectorExpression> LEFT = newCapture();
-    private static final Capture<ConnectorExpression> RIGHT = newCapture();
+    protected static final Capture<ConnectorExpression> LEFT = newCapture();
+    protected static final Capture<ConnectorExpression> RIGHT = newCapture();
 
     public enum ComparisonOperator
     {

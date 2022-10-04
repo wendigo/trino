@@ -13,6 +13,8 @@
  */
 package io.trino.plugin.jdbc.jmx;
 
+import io.trino.plugin.base.expression.ConnectorExpressionRewriter;
+import io.trino.plugin.base.expression.ConnectorExpressionRule;
 import io.trino.plugin.jdbc.ColumnMapping;
 import io.trino.plugin.jdbc.JdbcClient;
 import io.trino.plugin.jdbc.JdbcColumnHandle;
@@ -147,9 +149,9 @@ public final class StatisticsAwareJdbcClient
     }
 
     @Override
-    public Optional<String> convertPredicate(ConnectorSession session, ConnectorExpression expression, Map<String, ColumnHandle> assignments)
+    public Optional<String> convertPredicate(ConnectorSession session, ConnectorExpressionRule.Scope scope, ConnectorExpression expression, ConnectorExpressionRewriter.AssignmentResolver resolver)
     {
-        return stats.getConvertPredicate().wrap(() -> delegate().convertPredicate(session, expression, assignments));
+        return stats.getConvertPredicate().wrap(() -> delegate().convertPredicate(session, scope, expression, resolver));
     }
 
     @Override
@@ -191,7 +193,8 @@ public final class StatisticsAwareJdbcClient
     }
 
     @Override
-    public Optional<PreparedQuery> implementJoin(ConnectorSession session,
+    public Optional<PreparedQuery> implementJoin(
+            ConnectorSession session,
             JoinType joinType,
             PreparedQuery leftSource,
             PreparedQuery rightSource,
@@ -201,6 +204,22 @@ public final class StatisticsAwareJdbcClient
             JoinStatistics statistics)
     {
         return stats.getImplementJoin().wrap(() -> delegate().implementJoin(session, joinType, leftSource, rightSource, joinConditions, rightAssignments, leftAssignments, statistics));
+    }
+
+    @Override
+    public Optional<PreparedQuery> implementJoin(
+            ConnectorSession session,
+            JoinType joinType,
+            String leftAlias,
+            PreparedQuery leftSource,
+            Map<JdbcColumnHandle, String> leftAssignments,
+            String rightAlias,
+            PreparedQuery rightSource,
+            Map<JdbcColumnHandle, String> rightAssignments,
+            String joinCondition,
+            JoinStatistics statistics)
+    {
+        return stats.getImplementJoin().wrap(() -> delegate().implementJoin(session, joinType, leftAlias, leftSource, leftAssignments, rightAlias, rightSource, rightAssignments, joinCondition, statistics));
     }
 
     @Override

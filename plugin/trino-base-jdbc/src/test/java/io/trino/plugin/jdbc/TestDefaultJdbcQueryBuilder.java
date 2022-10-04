@@ -20,7 +20,6 @@ import com.google.common.collect.ImmutableSet;
 import com.google.common.collect.Multiset;
 import io.trino.spi.connector.ColumnHandle;
 import io.trino.spi.connector.ConnectorSession;
-import io.trino.spi.connector.JoinCondition;
 import io.trino.spi.connector.JoinType;
 import io.trino.spi.connector.SchemaTableName;
 import io.trino.spi.predicate.Domain;
@@ -500,9 +499,11 @@ public class TestDefaultJdbcQueryBuilder
                 SESSION,
                 connection,
                 JoinType.INNER,
+                "left",
                 new PreparedQuery("SELECT * FROM \"test_table\"", List.of()),
+                "right",
                 new PreparedQuery("SELECT * FROM \"test_table\"", List.of()),
-                List.of(new JdbcJoinCondition(columns.get(7), JoinCondition.Operator.EQUAL, columns.get(8))),
+                "condition",
                 Map.of(columns.get(2), "name1"),
                 Map.of(columns.get(3), "name2"));
         try (PreparedStatement preparedStatement = queryBuilder.prepareStatement(jdbcClient, SESSION, connection, preparedQuery)) {

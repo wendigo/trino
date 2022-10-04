@@ -76,6 +76,7 @@ import static com.google.common.collect.ImmutableList.toImmutableList;
 import static com.google.common.collect.ImmutableMap.toImmutableMap;
 import static com.google.common.collect.Iterables.getOnlyElement;
 import static io.trino.collect.cache.SafeCaches.buildNonEvictableCache;
+import static io.trino.plugin.base.expression.ConnectorExpressionRewriter.AssignmentResolver.forAssignments;
 import static io.trino.plugin.pinot.PinotColumnHandle.fromColumnMetadata;
 import static io.trino.plugin.pinot.PinotSessionProperties.isAggregationPushdownEnabled;
 import static io.trino.plugin.pinot.query.AggregateExpression.replaceIdentifier;
@@ -429,9 +430,9 @@ public class PinotMetadata
         AggregateFunctionRule.RewriteContext<Void> context = new AggregateFunctionRule.RewriteContext<>()
         {
             @Override
-            public Map<String, ColumnHandle> getAssignments()
+            public ConnectorExpressionRewriter.AssignmentResolver getResolver()
             {
-                return assignments;
+                return forAssignments(assignments);
             }
 
             @Override

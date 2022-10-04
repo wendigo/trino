@@ -18,6 +18,7 @@ import io.trino.matching.Capture;
 import io.trino.matching.Match;
 import io.trino.matching.Pattern;
 import io.trino.plugin.base.expression.ConnectorExpressionRule.RewriteContext;
+import io.trino.plugin.base.expression.ConnectorExpressionRule.Scope;
 import io.trino.spi.connector.ColumnHandle;
 import io.trino.spi.connector.ConnectorSession;
 import io.trino.spi.expression.ConnectorExpression;
@@ -28,6 +29,7 @@ import java.util.Optional;
 import java.util.Set;
 
 import static com.google.common.base.Verify.verify;
+import static com.google.common.base.Verify.verifyNotNull;
 import static io.trino.matching.Capture.newCapture;
 import static java.util.Objects.requireNonNull;
 
@@ -40,24 +42,35 @@ public final class ConnectorExpressionRewriter<Result>
         this.rules = ImmutableSet.copyOf(requireNonNull(rules, "rules is null"));
     }
 
-    public Optional<Result> rewrite(ConnectorSession session, ConnectorExpression expression, Map<String, ColumnHandle> assignments)
+    public Optional<Result> rewrite(ConnectorSession session, ConnectorExpression expression, AssignmentResolver resolver)
+    {
+        return rewrite(session, expression, Scope.ANY, resolver);
+    }
+
+    public Optional<Result> rewrite(ConnectorSession session, ConnectorExpression expression, Scope scope, AssignmentResolver resolver)
     {
         requireNonNull(session, "session is null");
         requireNonNull(expression, "expression is null");
-        requireNonNull(assignments, "assignments is null");
+        requireNonNull(resolver, "resolver is null");
 
         RewriteContext<Result> context = new RewriteContext<>()
         {
             @Override
-            public Map<String, ColumnHandle> getAssignments()
+            public AssignmentResolver getResolver()
             {
-                return assignments;
+                return resolver;
             }
 
             @Override
             public ConnectorSession getSession()
             {
                 return session;
+            }
+
+            @Override
+            public Scope getScope()
+            {
+                return scope;
             }
 
             @Override
@@ -87,6 +100,10 @@ public final class ConnectorExpressionRewriter<Result>
             ConnectorExpression expression,
             RewriteContext<Result> context)
     {
+        if (!rule.appliesTo(context.getScope())) {
+            return Optional.empty();
+        }
+
         Capture<ExpressionType> expressionCapture = newCapture();
         Pattern<ExpressionType> pattern = rule.getPattern().capturedAs(expressionCapture);
         Iterator<Match> matches = pattern.match(expression, context).iterator();
@@ -100,5 +117,32 @@ public final class ConnectorExpressionRewriter<Result>
             }
         }
         return Optional.empty();
+    }
+
+    public interface AssignmentResolver
+    {
+        default ColumnHandle getAssignment(String name)
+        {
+            throw new UnsupportedOperationException();
+        }
+
+        default Optional<String> getRelationAlias(String name)
+        {
+            return Optional.empty();
+        }
+
+        static AssignmentResolver forAssignments(Map<String, ColumnHandle> assignments)
+        {
+            return new AssignmentResolver() {
+                @Override
+                public ColumnHandle getAssignment(String name)
+                {
+                    requireNonNull(name, "name is null");
+                    ColumnHandle columnHandle = assignments.get(name);
+                    verifyNotNull(columnHandle, "No assignment for %s", name);
+                    return columnHandle;
+                }
+            };
+        }
     }
 }

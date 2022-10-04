@@ -14,11 +14,15 @@
 package io.trino.plugin.jdbc.expression;
 
 import com.google.common.collect.ImmutableSet;
+import io.trino.matching.Captures;
+import io.trino.matching.Pattern;
 import io.trino.plugin.base.expression.ConnectorExpressionRewriter;
 import io.trino.plugin.base.expression.ConnectorExpressionRule;
+import io.trino.spi.expression.ConnectorExpression;
 
 import java.util.HashMap;
 import java.util.Map;
+import java.util.Optional;
 import java.util.Set;
 import java.util.function.Function;
 
@@ -55,6 +59,12 @@ public class JdbcConnectorExpressionRewriterBuilder
         return this;
     }
 
+    public JdbcConnectorExpressionRewriterBuilder add(ConnectorExpressionRule<?, String> rule, ConnectorExpressionRule.Scope inScope)
+    {
+        rules.add(scopeAwareRule(rule, inScope));
+        return this;
+    }
+
     public JdbcConnectorExpressionRewriterBuilder withTypeClass(String typeClass, Set<String> typeNames)
     {
         requireNonNull(typeClass, "typeClass is null");
@@ -85,5 +95,28 @@ public class JdbcConnectorExpressionRewriterBuilder
     public interface ExpressionMapping<Continuation>
     {
         Continuation to(String rewritePattern);
+    }
+
+    private <ExpressionType extends ConnectorExpression> ConnectorExpressionRule<ExpressionType, String> scopeAwareRule(ConnectorExpressionRule<ExpressionType, String> delegate, ConnectorExpressionRule.Scope required)
+    {
+        return new ConnectorExpressionRule<>() {
+            @Override
+            public Pattern<ExpressionType> getPattern()
+            {
+                return delegate.getPattern();
+            }
+
+            @Override
+            public Optional<String> rewrite(ExpressionType expression, Captures captures, RewriteContext<String> context)
+            {
+                return delegate.rewrite(expression, captures, context);
+            }
+
+            @Override
+            public boolean appliesTo(Scope scope)
+            {
+                return scope == required;
+            }
+        };
     }
 }

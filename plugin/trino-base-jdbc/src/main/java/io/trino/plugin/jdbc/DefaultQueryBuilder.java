@@ -98,9 +98,11 @@ public class DefaultQueryBuilder
             ConnectorSession session,
             Connection connection,
             JoinType joinType,
+            String leftSourceAlias,
             PreparedQuery leftSource,
+            String rightSourceAlias,
             PreparedQuery rightSource,
-            List<JdbcJoinCondition> joinConditions,
+            String conditionExpression,
             Map<JdbcColumnHandle, String> leftAssignments,
             Map<JdbcColumnHandle, String> rightAssignments)
     {
@@ -108,23 +110,18 @@ public class DefaultQueryBuilder
         verify(!leftAssignments.isEmpty(), "leftAssignments is empty");
         verify(!rightAssignments.isEmpty(), "rightAssignments is empty");
         // Joins wih no conditions are not pushed down, so it is a same assumption and simplifies the code here
-        verify(!joinConditions.isEmpty(), "joinConditions is empty");
-
-        String leftRelationAlias = "l";
-        String rightRelationAlias = "r";
+        verify(!conditionExpression.isEmpty(), "joinCondition is empty");
 
         String query = format(
                 "SELECT %s, %s FROM (%s) %s %s (%s) %s ON %s",
-                formatAssignments(client, leftRelationAlias, leftAssignments),
-                formatAssignments(client, rightRelationAlias, rightAssignments),
+                formatAssignments(client, leftSourceAlias, leftAssignments),
+                formatAssignments(client, rightSourceAlias, rightAssignments),
                 leftSource.getQuery(),
-                leftRelationAlias,
+                leftSourceAlias,
                 formatJoinType(joinType),
                 rightSource.getQuery(),
-                rightRelationAlias,
-                joinConditions.stream()
-                        .map(condition -> formatJoinCondition(client, leftRelationAlias, rightRelationAlias, condition))
-                        .collect(joining(" AND ")));
+                rightSourceAlias,
+                conditionExpression);
         List<QueryParameter> parameters = ImmutableList.<QueryParameter>builder()
                 .addAll(leftSource.getParameters())
                 .addAll(rightSource.getParameters())
@@ -194,22 +191,6 @@ public class DefaultQueryBuilder
         }
 
         return statement;
-    }
-
-    protected String formatJoinCondition(JdbcClient client, String leftRelationAlias, String rightRelationAlias, JdbcJoinCondition condition)
-    {
-        return format(
-                "%s.%s %s %s.%s",
-                leftRelationAlias,
-                buildJoinColumn(client, condition.getLeftColumn()),
-                condition.getOperator().getValue(),
-                rightRelationAlias,
-                buildJoinColumn(client, condition.getRightColumn()));
-    }
-
-    protected String buildJoinColumn(JdbcClient client, JdbcColumnHandle columnHandle)
-    {
-        return client.quoted(columnHandle.getColumnName());
     }
 
     protected String formatAssignments(JdbcClient client, String relationAlias, Map<JdbcColumnHandle, String> assignments)

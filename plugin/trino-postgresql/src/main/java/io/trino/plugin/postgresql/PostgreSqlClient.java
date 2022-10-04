@@ -22,6 +22,7 @@ import io.airlift.slice.Slice;
 import io.trino.plugin.base.aggregation.AggregateFunctionRewriter;
 import io.trino.plugin.base.aggregation.AggregateFunctionRule;
 import io.trino.plugin.base.expression.ConnectorExpressionRewriter;
+import io.trino.plugin.base.expression.ConnectorExpressionRule;
 import io.trino.plugin.jdbc.BaseJdbcClient;
 import io.trino.plugin.jdbc.BaseJdbcConfig;
 import io.trino.plugin.jdbc.BooleanReadFunction;
@@ -64,8 +65,10 @@ import io.trino.plugin.jdbc.aggregation.ImplementStddevSamp;
 import io.trino.plugin.jdbc.aggregation.ImplementSum;
 import io.trino.plugin.jdbc.aggregation.ImplementVariancePop;
 import io.trino.plugin.jdbc.aggregation.ImplementVarianceSamp;
+import io.trino.plugin.jdbc.expression.CollationAwareComparisonRewrite;
 import io.trino.plugin.jdbc.expression.JdbcConnectorExpressionRewriterBuilder;
 import io.trino.plugin.jdbc.expression.RewriteComparison;
+import io.trino.plugin.jdbc.expression.RewriteConstantBoolean;
 import io.trino.plugin.jdbc.expression.RewriteIn;
 import io.trino.plugin.jdbc.mapping.IdentifierMapping;
 import io.trino.plugin.postgresql.PostgreSqlConfig.ArrayMapping;
@@ -139,6 +142,8 @@ import static com.google.common.base.Throwables.throwIfInstanceOf;
 import static com.google.common.base.Verify.verify;
 import static com.google.common.collect.ImmutableMap.toImmutableMap;
 import static io.airlift.slice.Slices.utf8Slice;
+import static io.trino.plugin.base.expression.ConnectorExpressionRule.Scope.FILTER;
+import static io.trino.plugin.base.expression.ConnectorExpressionRule.Scope.JOIN;
 import static io.trino.plugin.base.util.JsonTypeUtil.jsonParse;
 import static io.trino.plugin.base.util.JsonTypeUtil.toJsonValue;
 import static io.trino.plugin.jdbc.DecimalConfig.DecimalMapping.ALLOW_OVERFLOW;
@@ -179,6 +184,13 @@ import static io.trino.plugin.jdbc.StandardColumnMappings.varcharWriteFunction;
 import static io.trino.plugin.jdbc.TypeHandlingJdbcSessionProperties.getUnsupportedTypeHandling;
 import static io.trino.plugin.jdbc.UnsupportedTypeHandling.CONVERT_TO_VARCHAR;
 import static io.trino.plugin.jdbc.UnsupportedTypeHandling.IGNORE;
+import static io.trino.plugin.jdbc.expression.RewriteComparison.ComparisonOperator.EQUAL;
+import static io.trino.plugin.jdbc.expression.RewriteComparison.ComparisonOperator.GREATER_THAN;
+import static io.trino.plugin.jdbc.expression.RewriteComparison.ComparisonOperator.GREATER_THAN_OR_EQUAL;
+import static io.trino.plugin.jdbc.expression.RewriteComparison.ComparisonOperator.IS_DISTINCT_FROM;
+import static io.trino.plugin.jdbc.expression.RewriteComparison.ComparisonOperator.LESS_THAN;
+import static io.trino.plugin.jdbc.expression.RewriteComparison.ComparisonOperator.LESS_THAN_OR_EQUAL;
+import static io.trino.plugin.jdbc.expression.RewriteComparison.ComparisonOperator.NOT_EQUAL;
 import static io.trino.plugin.postgresql.PostgreSqlConfig.ArrayMapping.AS_ARRAY;
 import static io.trino.plugin.postgresql.PostgreSqlConfig.ArrayMapping.AS_JSON;
 import static io.trino.plugin.postgresql.PostgreSqlConfig.ArrayMapping.DISABLED;
@@ -301,9 +313,12 @@ public class PostgreSqlClient
         this.connectorExpressionRewriter = JdbcConnectorExpressionRewriterBuilder.newBuilder()
                 .addStandardRules(this::quoted)
                 // TODO allow all comparison operators for numeric types
-                .add(new RewriteComparison(ImmutableSet.of(RewriteComparison.ComparisonOperator.EQUAL, RewriteComparison.ComparisonOperator.NOT_EQUAL)))
+                .add(new CollationAwareComparisonRewrite(ImmutableSet.of(EQUAL, NOT_EQUAL, GREATER_THAN, GREATER_THAN_OR_EQUAL, LESS_THAN, LESS_THAN_OR_EQUAL, IS_DISTINCT_FROM)), JOIN)
+                .add(new RewriteComparison(ImmutableSet.of(EQUAL, NOT_EQUAL)), FILTER)
                 .add(new RewriteIn())
+                .add(new RewriteConstantBoolean(), JOIN)
                 .withTypeClass("integer_type", ImmutableSet.of("tinyint", "smallint", "integer", "bigint"))
+                .withTypeClass("varchar_type", ImmutableSet.of("varchar", "char"))
                 .map("$add(left: integer_type, right: integer_type)").to("left + right")
                 .map("$subtract(left: integer_type, right: integer_type)").to("left - right")
                 .map("$multiply(left: integer_type, right: integer_type)").to("left * right")
@@ -316,6 +331,7 @@ public class PostgreSqlClient
                 .map("$not(value: boolean)").to("NOT value")
                 .map("$is_null(value)").to("value IS NULL")
                 .map("$nullif(first, second)").to("NULLIF(first, second)")
+                .map("$upper(value: varchar_type)").to("UPPER(value)")
                 .build();
 
         JdbcTypeHandle bigintTypeHandle = new JdbcTypeHandle(Types.BIGINT, Optional.of("bigint"), Optional.empty(), Optional.empty(), Optional.empty(), Optional.empty());
@@ -752,9 +768,9 @@ public class PostgreSqlClient
     }
 
     @Override
-    public Optional<String> convertPredicate(ConnectorSession session, ConnectorExpression expression, Map<String, ColumnHandle> assignments)
+    public Optional<String> convertPredicate(ConnectorSession session, ConnectorExpressionRule.Scope scope, ConnectorExpression expression, ConnectorExpressionRewriter.AssignmentResolver resolver)
     {
-        return connectorExpressionRewriter.rewrite(session, expression, assignments);
+        return connectorExpressionRewriter.rewrite(session, expression, scope, resolver);
     }
 
     private static Optional<JdbcTypeHandle> toTypeHandle(DecimalType decimalType)

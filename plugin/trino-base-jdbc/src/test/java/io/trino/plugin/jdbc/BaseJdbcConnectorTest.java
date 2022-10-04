@@ -1215,6 +1215,7 @@ public abstract class BaseJdbcConnectorTest
 
             // varchar inequality along with an equality, which constitutes an equi-condition and allows filter to remain as part of the Join
             for (String operator : nonEqualities) {
+                System.out.println("Testing " + operator);
                 assertConditionallyPushedDown(
                         session,
                         format("SELECT n.name, nl.name FROM nation n JOIN %s nl ON n.regionkey = nl.regionkey AND n.name %s nl.name", nationLowercaseTable.getName(), operator),
@@ -1329,8 +1330,7 @@ public abstract class BaseJdbcConnectorTest
     protected boolean expectJoinPushdown(String operator)
     {
         if ("IS NOT DISTINCT FROM".equals(operator)) {
-            // TODO (https://github.com/trinodb/trino/issues/6967) support join pushdown for IS NOT DISTINCT FROM
-            return false;
+            return true;
         }
         switch (toJoinConditionOperator(operator)) {
             case EQUAL:
@@ -1350,7 +1350,7 @@ public abstract class BaseJdbcConnectorTest
     {
         if ("IS NOT DISTINCT FROM".equals(operator)) {
             // TODO (https://github.com/trinodb/trino/issues/6967) support join pushdown for IS NOT DISTINCT FROM
-            return false;
+            return true;
         }
         switch (toJoinConditionOperator(operator)) {
             case EQUAL:

@@ -45,6 +45,11 @@ public class RewriteVariable
     public Optional<String> rewrite(Variable variable, Captures captures, RewriteContext<String> context)
     {
         JdbcColumnHandle columnHandle = (JdbcColumnHandle) context.getAssignment(variable.getName());
-        return Optional.of(identifierQuote.apply(columnHandle.getColumnName()));
+        Optional<String> relationAlias = context.getRelationAlias(variable.getName());
+
+        String name = identifierQuote.apply(columnHandle.getColumnName());
+
+        return relationAlias.map(alias -> "%s.%s".formatted(alias, name))
+                .or(() -> Optional.of(name));
     }
 }

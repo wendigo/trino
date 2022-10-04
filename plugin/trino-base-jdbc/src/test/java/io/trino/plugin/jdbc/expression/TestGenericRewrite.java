@@ -14,8 +14,8 @@
 package io.trino.plugin.jdbc.expression;
 
 import io.trino.matching.Match;
+import io.trino.plugin.base.expression.ConnectorExpressionRewriter;
 import io.trino.plugin.base.expression.ConnectorExpressionRule.RewriteContext;
-import io.trino.spi.connector.ColumnHandle;
 import io.trino.spi.connector.ConnectorSession;
 import io.trino.spi.expression.Call;
 import io.trino.spi.expression.ConnectorExpression;
@@ -94,13 +94,13 @@ public class TestGenericRewrite
         return rewrite.rewrite(expression, match.get().captures(), new RewriteContext<>()
         {
             @Override
-            public Map<String, ColumnHandle> getAssignments()
+            public ConnectorSession getSession()
             {
                 throw new UnsupportedOperationException();
             }
 
             @Override
-            public ConnectorSession getSession()
+            public ConnectorExpressionRewriter.AssignmentResolver getResolver()
             {
                 throw new UnsupportedOperationException();
             }

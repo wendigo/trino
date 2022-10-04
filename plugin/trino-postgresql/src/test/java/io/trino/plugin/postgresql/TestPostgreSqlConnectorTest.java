@@ -97,7 +97,7 @@ public class TestPostgreSqlConnectorTest
     {
         switch (connectorBehavior) {
             case SUPPORTS_PREDICATE_PUSHDOWN_WITH_VARCHAR_INEQUALITY:
-                return false;
+                return true;
 
             case SUPPORTS_PREDICATE_EXPRESSION_PUSHDOWN:
                 // TODO remove once super has this set to true

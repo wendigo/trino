@@ -13,6 +13,8 @@
  */
 package io.trino.plugin.jdbc;
 
+import io.trino.plugin.base.expression.ConnectorExpressionRewriter.AssignmentResolver;
+import io.trino.plugin.base.expression.ConnectorExpressionRule;
 import io.trino.spi.TrinoException;
 import io.trino.spi.connector.AggregateFunction;
 import io.trino.spi.connector.ColumnHandle;
@@ -78,7 +80,7 @@ public interface JdbcClient
         return Optional.empty();
     }
 
-    default Optional<String> convertPredicate(ConnectorSession session, ConnectorExpression expression, Map<String, ColumnHandle> assignments)
+    default Optional<String> convertPredicate(ConnectorSession session, ConnectorExpressionRule.Scope scope, ConnectorExpression expression, AssignmentResolver resolver)
     {
         return Optional.empty();
     }
@@ -104,6 +106,7 @@ public interface JdbcClient
     PreparedStatement buildSql(ConnectorSession session, Connection connection, JdbcSplit split, JdbcTableHandle table, List<JdbcColumnHandle> columns)
             throws SQLException;
 
+    @Deprecated
     Optional<PreparedQuery> implementJoin(
             ConnectorSession session,
             JoinType joinType,
@@ -112,6 +115,18 @@ public interface JdbcClient
             List<JdbcJoinCondition> joinConditions,
             Map<JdbcColumnHandle, String> rightAssignments,
             Map<JdbcColumnHandle, String> leftAssignments,
+            JoinStatistics statistics);
+
+    Optional<PreparedQuery> implementJoin(
+            ConnectorSession session,
+            JoinType joinType,
+            String leftAlias,
+            PreparedQuery leftSource,
+            Map<JdbcColumnHandle, String> leftAssignments,
+            String rightAlias,
+            PreparedQuery rightSource,
+            Map<JdbcColumnHandle, String> rightAssignments,
+            String conditionExpression,
             JoinStatistics statistics);
 
     boolean supportsTopN(ConnectorSession session, JdbcTableHandle handle, List<JdbcSortItem> sortOrder);

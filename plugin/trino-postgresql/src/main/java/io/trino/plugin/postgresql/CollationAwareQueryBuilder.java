@@ -16,7 +16,6 @@ package io.trino.plugin.postgresql;
 import io.trino.plugin.jdbc.DefaultQueryBuilder;
 import io.trino.plugin.jdbc.JdbcClient;
 import io.trino.plugin.jdbc.JdbcColumnHandle;
-import io.trino.plugin.jdbc.JdbcJoinCondition;
 import io.trino.plugin.jdbc.JdbcTypeHandle;
 import io.trino.plugin.jdbc.QueryParameter;
 import io.trino.plugin.jdbc.WriteFunction;
@@ -25,7 +24,6 @@ import io.trino.spi.type.Type;
 
 import java.util.Optional;
 import java.util.function.Consumer;
-import java.util.stream.Stream;
 
 import static io.trino.plugin.postgresql.PostgreSqlClient.isCollatable;
 import static io.trino.plugin.postgresql.PostgreSqlSessionProperties.isEnableStringPushdownWithCollate;
@@ -34,25 +32,6 @@ import static java.lang.String.format;
 public class CollationAwareQueryBuilder
         extends DefaultQueryBuilder
 {
-    @Override
-    protected String formatJoinCondition(JdbcClient client, String leftRelationAlias, String rightRelationAlias, JdbcJoinCondition condition)
-    {
-        boolean isCollatable = Stream.of(condition.getLeftColumn(), condition.getRightColumn())
-                .anyMatch(PostgreSqlClient::isCollatable);
-
-        if (isCollatable) {
-            return format(
-                    "%s.%s COLLATE \"C\" %s %s.%s COLLATE \"C\"",
-                    leftRelationAlias,
-                    buildJoinColumn(client, condition.getLeftColumn()),
-                    condition.getOperator().getValue(),
-                    rightRelationAlias,
-                    buildJoinColumn(client, condition.getRightColumn()));
-        }
-
-        return super.formatJoinCondition(client, leftRelationAlias, rightRelationAlias, condition);
-    }
-
     @Override
     protected String toPredicate(JdbcClient client, ConnectorSession session, JdbcColumnHandle column, JdbcTypeHandle jdbcType, Type type, WriteFunction writeFunction, String operator, Object value, Consumer<QueryParameter> accumulator)
     {

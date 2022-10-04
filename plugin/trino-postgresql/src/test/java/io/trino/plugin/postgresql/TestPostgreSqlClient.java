@@ -14,6 +14,7 @@
 package io.trino.plugin.postgresql;
 
 import com.google.common.collect.ImmutableMap;
+import io.trino.plugin.base.expression.ConnectorExpressionRewriter;
 import io.trino.plugin.jdbc.BaseJdbcConfig;
 import io.trino.plugin.jdbc.ColumnMapping;
 import io.trino.plugin.jdbc.DefaultQueryBuilder;
@@ -60,11 +61,17 @@ import java.util.Map.Entry;
 import java.util.Optional;
 import java.util.stream.Stream;
 
+import static com.google.common.base.Verify.verifyNotNull;
 import static com.google.common.collect.ImmutableMap.toImmutableMap;
+import static io.airlift.slice.Slices.utf8Slice;
 import static io.trino.SessionTestUtils.TEST_SESSION;
+import static io.trino.plugin.base.expression.ConnectorExpressionRewriter.AssignmentResolver.forAssignments;
+import static io.trino.plugin.base.expression.ConnectorExpressionRule.Scope.FILTER;
+import static io.trino.plugin.base.expression.ConnectorExpressionRule.Scope.JOIN;
 import static io.trino.spi.type.BigintType.BIGINT;
 import static io.trino.spi.type.BooleanType.BOOLEAN;
 import static io.trino.spi.type.DoubleType.DOUBLE;
+import static io.trino.spi.type.VarcharType.VARCHAR;
 import static io.trino.spi.type.VarcharType.createVarcharType;
 import static io.trino.sql.planner.TestingPlannerContext.PLANNER_CONTEXT;
 import static io.trino.sql.planner.TypeAnalyzer.createTestingTypeAnalyzer;
@@ -72,6 +79,7 @@ import static io.trino.testing.DataProviders.toDataProvider;
 import static io.trino.testing.assertions.Assert.assertEquals;
 import static io.trino.type.InternalTypeManager.TESTING_TYPE_MANAGER;
 import static java.lang.String.format;
+import static java.util.Objects.requireNonNull;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.testng.Assert.assertTrue;
 
@@ -218,6 +226,7 @@ public class TestPostgreSqlClient
     {
         assertThat(JDBC_CLIENT.convertPredicate(
                 SESSION,
+                FILTER,
                 translateToConnectorExpression(
                         new LogicalExpression(
                                 LogicalExpression.Operator.OR,
@@ -233,9 +242,9 @@ public class TestPostgreSqlClient
                         Map.of(
                                 "c_bigint_symbol", BIGINT,
                                 "c_bigint_symbol_2", BIGINT)),
-                Map.of(
+                forAssignments(Map.of(
                         "c_bigint_symbol", BIGINT_COLUMN,
-                        "c_bigint_symbol_2", BIGINT_COLUMN)))
+                        "c_bigint_symbol_2", BIGINT_COLUMN))))
                 .hasValue("((\"c_bigint\") = (42)) OR ((\"c_bigint\") = (415))");
     }
 
@@ -244,6 +253,7 @@ public class TestPostgreSqlClient
     {
         assertThat(JDBC_CLIENT.convertPredicate(
                 SESSION,
+                FILTER,
                 translateToConnectorExpression(
                         new LogicalExpression(
                                 LogicalExpression.Operator.OR,
@@ -266,9 +276,9 @@ public class TestPostgreSqlClient
                         Map.of(
                                 "c_bigint_symbol", BIGINT,
                                 "c_bigint_symbol_2", BIGINT)),
-                Map.of(
+                forAssignments(Map.of(
                         "c_bigint_symbol", BIGINT_COLUMN,
-                        "c_bigint_symbol_2", BIGINT_COLUMN)))
+                        "c_bigint_symbol_2", BIGINT_COLUMN))))
                 .hasValue("((\"c_bigint\") = (42)) OR (((\"c_bigint\") = (43)) AND ((\"c_bigint\") = (44)))");
     }
 
@@ -277,13 +287,14 @@ public class TestPostgreSqlClient
     {
         Optional<String> converted = JDBC_CLIENT.convertPredicate(
                 SESSION,
+                FILTER,
                 translateToConnectorExpression(
                         new ComparisonExpression(
                                 operator,
                                 new SymbolReference("c_bigint_symbol"),
                                 LITERAL_ENCODER.toExpression(TEST_SESSION, 42L, BIGINT)),
                         Map.of("c_bigint_symbol", BIGINT)),
-                Map.of("c_bigint_symbol", BIGINT_COLUMN));
+                forAssignments(Map.of("c_bigint_symbol", BIGINT_COLUMN)));
 
         switch (operator) {
             case EQUAL:
@@ -302,6 +313,45 @@ public class TestPostgreSqlClient
         throw new UnsupportedOperationException("Unsupported operator: " + operator);
     }
 
+    @Test(dataProvider = "testConvertComparisonDataProvider")
+    public void testConvertComparisonWithCollation(ComparisonExpression.Operator operator)
+    {
+        // In FILTER scope we do not collate because performance is really poor
+        Optional<String> convertedFilter = JDBC_CLIENT.convertPredicate(
+                SESSION,
+                FILTER,
+                translateToConnectorExpression(
+                        new ComparisonExpression(
+                                operator,
+                                new SymbolReference("c_varchar"),
+                                LITERAL_ENCODER.toExpression(TEST_SESSION, utf8Slice("value"), VARCHAR)),
+                        Map.of("c_varchar", VARCHAR)),
+                forAssignments(Map.of("c_varchar", VARCHAR_COLUMN)));
+
+        Optional<String> convertedJoin = JDBC_CLIENT.convertPredicate(
+                SESSION,
+                JOIN,
+                translateToConnectorExpression(
+                        new ComparisonExpression(
+                                operator,
+                                new SymbolReference("c_varchar"),
+                                LITERAL_ENCODER.toExpression(TEST_SESSION, utf8Slice("value"), VARCHAR)),
+                        Map.of("c_varchar", VARCHAR)),
+                forAssignments(Map.of("c_varchar", VARCHAR_COLUMN)));
+
+        switch (operator) {
+            case EQUAL, NOT_EQUAL -> {
+                assertThat(convertedFilter).hasValue(format("(\"c_varchar\") %s ('value')", operator.getValue()));
+                assertThat(convertedJoin).hasValue(format("(\"c_varchar\") %s ('value') COLLATE \"C\"", operator.getValue()));
+            }
+            case LESS_THAN, LESS_THAN_OR_EQUAL, GREATER_THAN, GREATER_THAN_OR_EQUAL, IS_DISTINCT_FROM -> {
+                // Not supported yet, even for bigint
+                assertThat(convertedFilter).isEmpty();
+                assertThat(convertedJoin).isEmpty();
+            }
+        }
+    }
+
     @DataProvider
     public static Object[][] testConvertComparisonDataProvider()
     {
@@ -314,13 +364,14 @@ public class TestPostgreSqlClient
     {
         Optional<String> converted = JDBC_CLIENT.convertPredicate(
                 SESSION,
+                FILTER,
                 translateToConnectorExpression(
                         new ArithmeticBinaryExpression(
                                 operator,
                                 new SymbolReference("c_bigint_symbol"),
                                 LITERAL_ENCODER.toExpression(TEST_SESSION, 42L, BIGINT)),
                         Map.of("c_bigint_symbol", BIGINT)),
-                Map.of("c_bigint_symbol", BIGINT_COLUMN));
+                forAssignments(Map.of("c_bigint_symbol", BIGINT_COLUMN)));
 
         assertThat(converted).hasValue(format("(\"c_bigint\") %s (42)", operator.getValue()));
     }
@@ -337,39 +388,58 @@ public class TestPostgreSqlClient
     {
         Optional<String> converted = JDBC_CLIENT.convertPredicate(
                 SESSION,
+                FILTER,
                 translateToConnectorExpression(
                         new ArithmeticUnaryExpression(
                                 ArithmeticUnaryExpression.Sign.MINUS,
                                 new SymbolReference("c_bigint_symbol")),
                         Map.of("c_bigint_symbol", BIGINT)),
-                Map.of("c_bigint_symbol", BIGINT_COLUMN));
+                forAssignments(Map.of("c_bigint_symbol", BIGINT_COLUMN)));
 
         assertThat(converted).hasValue("-(\"c_bigint\")");
+    }
+
+    @Test
+    public void testConvertAliasedPredicate()
+    {
+        Optional<String> converted = JDBC_CLIENT.convertPredicate(
+                SESSION,
+                FILTER,
+                translateToConnectorExpression(
+                        new SymbolReference("c_bigint_symbol"),
+                        Map.of("c_bigint_symbol", BIGINT)),
+                resolverWithAliases(Map.of("c_bigint_symbol", BIGINT_COLUMN), Map.of("c_bigint_symbol", "prefix")));
+
+        assertThat(converted).hasValue("prefix.\"c_bigint\"");
     }
 
     @Test
     public void testConvertLike()
     {
         // c_varchar LIKE '%pattern%'
-        assertThat(JDBC_CLIENT.convertPredicate(SESSION,
+        assertThat(JDBC_CLIENT.convertPredicate(
+                SESSION,
+                FILTER,
                 translateToConnectorExpression(
                         new LikePredicate(
                                 new SymbolReference("c_varchar_symbol"),
                                 new StringLiteral("%pattern%"),
                                 Optional.empty()),
                         Map.of("c_varchar_symbol", VARCHAR_COLUMN.getColumnType())),
-                Map.of("c_varchar_symbol", VARCHAR_COLUMN)))
+                forAssignments(Map.of("c_varchar_symbol", VARCHAR_COLUMN))))
                 .hasValue("(\"c_varchar\") LIKE ('%pattern%')");
 
         // c_varchar LIKE '%pattern\%' ESCAPE '\'
-        assertThat(JDBC_CLIENT.convertPredicate(SESSION,
+        assertThat(JDBC_CLIENT.convertPredicate(
+                SESSION,
+                FILTER,
                 translateToConnectorExpression(
                         new LikePredicate(
                                 new SymbolReference("c_varchar"),
                                 new StringLiteral("%pattern\\%"),
                                 new StringLiteral("\\")),
                         Map.of("c_varchar", VARCHAR_COLUMN.getColumnType())),
-                Map.of(VARCHAR_COLUMN.getColumnName(), VARCHAR_COLUMN)))
+                forAssignments(Map.of(VARCHAR_COLUMN.getColumnName(), VARCHAR_COLUMN))))
                 .hasValue("(\"c_varchar\") LIKE ('%pattern\\%') ESCAPE ('\\')");
     }
 
@@ -377,12 +447,14 @@ public class TestPostgreSqlClient
     public void testConvertIsNull()
     {
         // c_varchar IS NULL
-        assertThat(JDBC_CLIENT.convertPredicate(SESSION,
+        assertThat(JDBC_CLIENT.convertPredicate(
+                SESSION,
+                FILTER,
                 translateToConnectorExpression(
                         new IsNullPredicate(
                                 new SymbolReference("c_varchar_symbol")),
                         Map.of("c_varchar_symbol", VARCHAR_COLUMN.getColumnType())),
-                Map.of("c_varchar_symbol", VARCHAR_COLUMN)))
+                forAssignments(Map.of("c_varchar_symbol", VARCHAR_COLUMN))))
                 .hasValue("(\"c_varchar\") IS NULL");
     }
 
@@ -390,12 +462,14 @@ public class TestPostgreSqlClient
     public void testConvertIsNotNull()
     {
         // c_varchar IS NOT NULL
-        assertThat(JDBC_CLIENT.convertPredicate(SESSION,
+        assertThat(JDBC_CLIENT.convertPredicate(
+                SESSION,
+                FILTER,
                 translateToConnectorExpression(
                         new IsNotNullPredicate(
                                 new SymbolReference("c_varchar_symbol")),
                         Map.of("c_varchar_symbol", VARCHAR_COLUMN.getColumnType())),
-                Map.of("c_varchar_symbol", VARCHAR_COLUMN)))
+                forAssignments(Map.of("c_varchar_symbol", VARCHAR_COLUMN))))
                 .hasValue("(\"c_varchar\") IS NOT NULL");
     }
 
@@ -403,13 +477,15 @@ public class TestPostgreSqlClient
     public void testConvertNullIf()
     {
         // nullif(a_varchar, b_varchar)
-        assertThat(JDBC_CLIENT.convertPredicate(SESSION,
+        assertThat(JDBC_CLIENT.convertPredicate(
+                SESSION,
+                FILTER,
                 translateToConnectorExpression(
                         new NullIfExpression(
                                 new SymbolReference("a_varchar_symbol"),
                                 new SymbolReference("b_varchar_symbol")),
                         ImmutableMap.of("a_varchar_symbol", VARCHAR_COLUMN.getColumnType(), "b_varchar_symbol", VARCHAR_COLUMN.getColumnType())),
-                ImmutableMap.of("a_varchar_symbol", VARCHAR_COLUMN, "b_varchar_symbol", VARCHAR_COLUMN)))
+                forAssignments(ImmutableMap.of("a_varchar_symbol", VARCHAR_COLUMN, "b_varchar_symbol", VARCHAR_COLUMN))))
                 .hasValue("NULLIF((\"c_varchar\"), (\"c_varchar\"))");
     }
 
@@ -417,13 +493,15 @@ public class TestPostgreSqlClient
     public void testConvertNotExpression()
     {
         // NOT(expression)
-        assertThat(JDBC_CLIENT.convertPredicate(SESSION,
+        assertThat(JDBC_CLIENT.convertPredicate(
+                SESSION,
+                FILTER,
                 translateToConnectorExpression(
                         new NotExpression(
                                 new IsNotNullPredicate(
                                         new SymbolReference("c_varchar_symbol"))),
                         Map.of("c_varchar_symbol", VARCHAR_COLUMN.getColumnType())),
-                Map.of("c_varchar_symbol", VARCHAR_COLUMN)))
+                forAssignments(Map.of("c_varchar_symbol", VARCHAR_COLUMN))))
                 .hasValue("NOT ((\"c_varchar\") IS NOT NULL)");
     }
 
@@ -432,12 +510,13 @@ public class TestPostgreSqlClient
     {
         assertThat(JDBC_CLIENT.convertPredicate(
                 SESSION,
+                FILTER,
                 translateToConnectorExpression(
                                 new InPredicate(
                                         new SymbolReference("c_varchar"),
                                         new InListExpression(List.of(new StringLiteral("value1"), new StringLiteral("value2"), new SymbolReference("c_varchar2")))),
                                 Map.of("c_varchar", VARCHAR_COLUMN.getColumnType(), "c_varchar2", VARCHAR_COLUMN2.getColumnType())),
-                Map.of(VARCHAR_COLUMN.getColumnName(), VARCHAR_COLUMN, VARCHAR_COLUMN2.getColumnName(), VARCHAR_COLUMN2)))
+                forAssignments(Map.of(VARCHAR_COLUMN.getColumnName(), VARCHAR_COLUMN, VARCHAR_COLUMN2.getColumnName(), VARCHAR_COLUMN2))))
                 .hasValue("(\"c_varchar\") IN ('value1', 'value2', \"c_varchar2\")");
     }
 
@@ -451,5 +530,25 @@ public class TestPostgreSqlClient
                         PLANNER_CONTEXT,
                         createTestingTypeAnalyzer(PLANNER_CONTEXT))
                 .orElseThrow();
+    }
+
+    static ConnectorExpressionRewriter.AssignmentResolver resolverWithAliases(Map<String, ColumnHandle> assignments, Map<String, String> aliases)
+    {
+        return new ConnectorExpressionRewriter.AssignmentResolver() {
+            @Override
+            public ColumnHandle getAssignment(String name)
+            {
+                requireNonNull(name, "name is null");
+                ColumnHandle columnHandle = assignments.get(name);
+                verifyNotNull(columnHandle, "No assignment for %s", name);
+                return columnHandle;
+            }
+
+            @Override
+            public Optional<String> getRelationAlias(String name)
+            {
+                return Optional.ofNullable(aliases.get(requireNonNull(name, "name is null")));
+            }
+        };
     }
 }

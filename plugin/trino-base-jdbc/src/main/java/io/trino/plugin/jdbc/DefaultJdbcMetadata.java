@@ -17,6 +17,7 @@ import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.ImmutableSet;
 import io.airlift.slice.Slice;
+import io.trino.plugin.base.expression.ConnectorExpressionRewriter;
 import io.trino.plugin.jdbc.PredicatePushdownController.DomainPushdownResult;
 import io.trino.plugin.jdbc.ptf.Query.QueryFunctionHandle;
 import io.trino.spi.TrinoException;
@@ -82,6 +83,9 @@ import static com.google.common.base.Verify.verify;
 import static com.google.common.base.Verify.verifyNotNull;
 import static com.google.common.collect.ImmutableList.toImmutableList;
 import static com.google.common.collect.ImmutableMap.toImmutableMap;
+import static io.trino.plugin.base.expression.ConnectorExpressionRewriter.AssignmentResolver.forAssignments;
+import static io.trino.plugin.base.expression.ConnectorExpressionRule.Scope.FILTER;
+import static io.trino.plugin.base.expression.ConnectorExpressionRule.Scope.JOIN;
 import static io.trino.plugin.base.expression.ConnectorExpressions.and;
 import static io.trino.plugin.base.expression.ConnectorExpressions.extractConjuncts;
 import static io.trino.plugin.jdbc.JdbcMetadataSessionProperties.isAggregationPushdownEnabled;
@@ -187,7 +191,7 @@ public class DefaultJdbcMetadata
                 List<String> newExpressions = new ArrayList<>();
                 List<ConnectorExpression> remainingExpressions = new ArrayList<>();
                 for (ConnectorExpression expression : extractConjuncts(constraint.getExpression())) {
-                    Optional<String> converted = jdbcClient.convertPredicate(session, expression, constraint.getAssignments());
+                    Optional<String> converted = jdbcClient.convertPredicate(session, FILTER, expression, forAssignments(constraint.getAssignments()));
                     if (converted.isPresent()) {
                         newExpressions.add(converted.get());
                     }
@@ -384,6 +388,100 @@ public class DefaultJdbcMetadata
                 nextSyntheticColumnId);
 
         return Optional.of(new AggregationApplicationResult<>(handle, projections.build(), resultAssignments.build(), ImmutableMap.of(), precalculateStatisticsForPushdown));
+    }
+
+    @Override
+    public Optional<JoinApplicationResult<ConnectorTableHandle>> applyJoin(
+            ConnectorSession session,
+            JoinType joinType,
+            ConnectorTableHandle left,
+            ConnectorTableHandle right,
+            ConnectorExpression joinCondition,
+            Map<String, ColumnHandle> leftAssignments,
+            Map<String, ColumnHandle> rightAssignments,
+            JoinStatistics statistics)
+    {
+        if (!isJoinPushdownEnabled(session)) {
+            return Optional.empty();
+        }
+
+        JdbcTableHandle leftHandle = flushAttributesAsQuery(session, (JdbcTableHandle) left);
+        JdbcTableHandle rightHandle = flushAttributesAsQuery(session, (JdbcTableHandle) right);
+        int nextSyntheticColumnId = max(leftHandle.getNextSyntheticColumnId(), rightHandle.getNextSyntheticColumnId());
+
+        ImmutableMap.Builder<JdbcColumnHandle, JdbcColumnHandle> newLeftColumnsBuilder = ImmutableMap.builder();
+        for (JdbcColumnHandle column : jdbcClient.getColumns(session, leftHandle)) {
+            newLeftColumnsBuilder.put(column, JdbcColumnHandle.builderFrom(column)
+                    .setColumnName(column.getColumnName() + "_" + nextSyntheticColumnId)
+                    .build());
+            nextSyntheticColumnId++;
+        }
+        Map<JdbcColumnHandle, JdbcColumnHandle> newLeftColumns = newLeftColumnsBuilder.buildOrThrow();
+
+        ImmutableMap.Builder<JdbcColumnHandle, JdbcColumnHandle> newRightColumnsBuilder = ImmutableMap.builder();
+        for (JdbcColumnHandle column : jdbcClient.getColumns(session, rightHandle)) {
+            newRightColumnsBuilder.put(column, JdbcColumnHandle.builderFrom(column)
+                    .setColumnName(column.getColumnName() + "_" + nextSyntheticColumnId)
+                    .build());
+            nextSyntheticColumnId++;
+        }
+        Map<JdbcColumnHandle, JdbcColumnHandle> newRightColumns = newRightColumnsBuilder.buildOrThrow();
+
+        String leftRelationAlias = "l";
+        String rightRelationAlias = "r";
+
+        ImmutableMap.Builder<String, String> assignmentsAliases = ImmutableMap.builder();
+        for (String assignment : leftAssignments.keySet()) {
+            assignmentsAliases.put(assignment, leftRelationAlias);
+        }
+
+        for (String assignment : rightAssignments.keySet()) {
+            assignmentsAliases.put(assignment, rightRelationAlias);
+        }
+
+        Optional<String> convertedExpression = jdbcClient.convertPredicate(session, JOIN, joinCondition, forJoinAssignments(leftAssignments, rightAssignments, assignmentsAliases.buildOrThrow()));
+        if (convertedExpression.isEmpty()) {
+            return Optional.empty();
+        }
+
+        Optional<PreparedQuery> joinQuery = jdbcClient.implementJoin(
+                session,
+                joinType,
+                leftRelationAlias,
+                asPreparedQuery(leftHandle),
+                newLeftColumns.entrySet().stream().collect(toImmutableMap(Map.Entry::getKey, entry -> entry.getValue().getColumnName())),
+                rightRelationAlias,
+                asPreparedQuery(rightHandle),
+                newRightColumns.entrySet().stream().collect(toImmutableMap(Map.Entry::getKey, entry -> entry.getValue().getColumnName())),
+                convertedExpression.get(),
+                statistics);
+
+        if (joinQuery.isEmpty()) {
+            return JdbcMetadata.super.applyJoin(session, joinType, left, right, joinCondition, leftAssignments, rightAssignments, statistics);
+        }
+
+        return Optional.of(new JoinApplicationResult<>(
+                new JdbcTableHandle(
+                        new JdbcQueryRelationHandle(joinQuery.get()),
+                        TupleDomain.all(),
+                        ImmutableList.of(),
+                        Optional.empty(),
+                        OptionalLong.empty(),
+                        Optional.of(
+                                ImmutableList.<JdbcColumnHandle>builder()
+                                        .addAll(newLeftColumns.values())
+                                        .addAll(newRightColumns.values())
+                                        .build()),
+                        leftHandle.getAllReferencedTables().flatMap(leftReferencedTables ->
+                                rightHandle.getAllReferencedTables().map(rightReferencedTables ->
+                                        ImmutableSet.<SchemaTableName>builder()
+                                                .addAll(leftReferencedTables)
+                                                .addAll(rightReferencedTables)
+                                                .build())),
+                        nextSyntheticColumnId),
+                ImmutableMap.copyOf(newLeftColumns),
+                ImmutableMap.copyOf(newRightColumns),
+                precalculateStatisticsForPushdown));
     }
 
     @Override
@@ -876,5 +974,38 @@ public class DefaultJdbcMetadata
     public void renameSchema(ConnectorSession session, String schemaName, String newSchemaName)
     {
         jdbcClient.renameSchema(session, schemaName, newSchemaName);
+    }
+
+    private static ConnectorExpressionRewriter.AssignmentResolver forJoinAssignments(
+            Map<String, ColumnHandle> leftAssignments,
+            Map<String, ColumnHandle> rightAssignments,
+            Map<String, String> assignmentRelations)
+    {
+        return new ConnectorExpressionRewriter.AssignmentResolver() {
+            @Override
+            public ColumnHandle getAssignment(String name)
+            {
+                requireNonNull(name, "name is null");
+
+                ColumnHandle columnHandle = leftAssignments.get(name);
+                if (columnHandle != null) {
+                    return columnHandle;
+                }
+
+                columnHandle = rightAssignments.get(name);
+                verifyNotNull(columnHandle, "No assignment for %s on either left or right side", name);
+                return columnHandle;
+            }
+
+            @Override
+            public Optional<String> getRelationAlias(String name)
+            {
+                if (assignmentRelations.containsKey(name)) {
+                    return Optional.of(assignmentRelations.get(name));
+                }
+
+                throw new IllegalStateException("No relation alias for %s".formatted(name));
+            }
+        };
     }
 }

@@ -467,6 +467,39 @@ public abstract class BaseJdbcClient
     public Optional<PreparedQuery> implementJoin(
             ConnectorSession session,
             JoinType joinType,
+            String leftAlias,
+            PreparedQuery leftSource,
+            Map<JdbcColumnHandle, String> leftAssignments,
+            String rightAlias,
+            PreparedQuery rightSource,
+            Map<JdbcColumnHandle, String> rightAssignments,
+            String conditionExpression,
+            JoinStatistics statistics)
+    {
+        try (Connection connection = this.connectionFactory.openConnection(session)) {
+            return Optional.of(queryBuilder.prepareJoinQuery(
+                    this,
+                    session,
+                    connection,
+                    joinType,
+                    leftAlias,
+                    leftSource,
+                    rightAlias,
+                    rightSource,
+                    conditionExpression,
+                    leftAssignments,
+                    rightAssignments));
+        }
+        catch (SQLException e) {
+            throw new TrinoException(JDBC_ERROR, e);
+        }
+    }
+
+    @Override
+    @Deprecated
+    public Optional<PreparedQuery> implementJoin(
+            ConnectorSession session,
+            JoinType joinType,
             PreparedQuery leftSource,
             PreparedQuery rightSource,
             List<JdbcJoinCondition> joinConditions,
@@ -480,21 +513,41 @@ public abstract class BaseJdbcClient
             }
         }
 
+        String leftRelationAlias = "l";
+        String rightRelationAlias = "r";
+
+        String joinCondition = joinConditions.stream()
+                .map(condition -> formatJoinCondition(leftRelationAlias, rightRelationAlias, condition))
+                .collect(joining(" AND "));
+
         try (Connection connection = this.connectionFactory.openConnection(session)) {
             return Optional.of(queryBuilder.prepareJoinQuery(
                     this,
                     session,
                     connection,
                     joinType,
+                    leftRelationAlias,
                     leftSource,
+                    rightRelationAlias,
                     rightSource,
-                    joinConditions,
+                    joinCondition,
                     leftAssignments,
                     rightAssignments));
         }
         catch (SQLException e) {
             throw new TrinoException(JDBC_ERROR, e);
         }
+    }
+
+    protected String formatJoinCondition(String leftRelationAlias, String rightRelationAlias, JdbcJoinCondition condition)
+    {
+        return format(
+                "%s.%s %s %s.%s",
+                leftRelationAlias,
+                quoted(condition.getLeftColumn().getColumnName()),
+                condition.getOperator().getValue(),
+                rightRelationAlias,
+                quoted(condition.getRightColumn().getColumnName()));
     }
 
     protected boolean isSupportedJoinCondition(ConnectorSession session, JdbcJoinCondition joinCondition)

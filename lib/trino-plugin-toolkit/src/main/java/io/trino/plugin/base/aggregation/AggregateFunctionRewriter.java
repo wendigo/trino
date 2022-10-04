@@ -27,6 +27,7 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
 
+import static io.trino.plugin.base.expression.ConnectorExpressionRewriter.AssignmentResolver.forAssignments;
 import static java.util.Objects.requireNonNull;
 
 public final class AggregateFunctionRewriter<AggregationResult, ExpressionResult>
@@ -45,12 +46,14 @@ public final class AggregateFunctionRewriter<AggregationResult, ExpressionResult
         requireNonNull(aggregateFunction, "aggregateFunction is null");
         requireNonNull(assignments, "assignments is null");
 
+        ConnectorExpressionRewriter.AssignmentResolver resolver = forAssignments(assignments);
+
         RewriteContext<ExpressionResult> context = new RewriteContext<>()
         {
             @Override
-            public Map<String, ColumnHandle> getAssignments()
+            public ConnectorExpressionRewriter.AssignmentResolver getResolver()
             {
-                return assignments;
+                return resolver;
             }
 
             @Override
@@ -62,7 +65,7 @@ public final class AggregateFunctionRewriter<AggregationResult, ExpressionResult
             @Override
             public Optional<ExpressionResult> rewriteExpression(ConnectorExpression expression)
             {
-                return connectorExpressionRewriter.rewrite(session, expression, assignments);
+                return connectorExpressionRewriter.rewrite(session, expression, resolver);
             }
         };
 
