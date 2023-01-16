@@ -40,6 +40,7 @@ import java.sql.Statement;
 import java.util.Map;
 
 import static com.google.common.io.RecursiveDeleteOption.ALLOW_INSECURE;
+import static io.trino.testing.containers.TestContainers.verifyImagePlatformMatchesJvmRuntime;
 import static java.lang.String.format;
 import static java.util.UUID.randomUUID;
 import static org.testcontainers.utility.MountableFile.forClasspathResource;
@@ -84,14 +85,14 @@ public class TestingDruidServer
             f.setExecutable(true, false);
             this.httpClient = new OkHttpClient();
             network = Network.newNetwork();
-            this.zookeeper = new GenericContainer<>("zookeeper")
+            this.zookeeper = verifyImagePlatformMatchesJvmRuntime(new GenericContainer<>("zookeeper")
                     .withNetwork(network)
                     .withNetworkAliases("zookeeper")
                     .withStartupCheckStrategy(new IsRunningStartupCheckStrategy())
-                    .waitingFor(Wait.forListeningPort());
+                    .waitingFor(Wait.forListeningPort()));
             zookeeper.start();
 
-            this.coordinator = new GenericContainer<>(dockerImageName)
+            this.coordinator = verifyImagePlatformMatchesJvmRuntime(new GenericContainer<>(dockerImageName)
                     .withExposedPorts(DRUID_COORDINATOR_PORT)
                     .withNetwork(network)
                     .withCommand("coordinator")
@@ -108,10 +109,10 @@ public class TestingDruidServer
                     .withCopyFileToContainer(
                             forClasspathResource("druid-coordinator-jvm.config"),
                             "/opt/druid/conf/druid/cluster/master/coordinator-overlord/jvm.config")
-                    .waitingFor(Wait.forHttp("/status/selfDiscovered"));
+                    .waitingFor(Wait.forHttp("/status/selfDiscovered")));
             coordinator.start();
 
-            this.broker = new GenericContainer<>(DRUID_DOCKER_IMAGE)
+            this.broker = verifyImagePlatformMatchesJvmRuntime(new GenericContainer<>(DRUID_DOCKER_IMAGE)
                     .withExposedPorts(DRUID_BROKER_PORT)
                     .withNetwork(network)
                     .withCommand("broker")
@@ -128,10 +129,10 @@ public class TestingDruidServer
                     .withCopyFileToContainer(
                             forClasspathResource("broker-jvm.config"),
                             "/opt/druid/conf/druid/cluster/query/broker/jvm.config")
-                    .waitingFor(Wait.forHttp("/status/selfDiscovered"));
+                    .waitingFor(Wait.forHttp("/status/selfDiscovered")));
             broker.start();
 
-            this.historical = new GenericContainer<>(DRUID_DOCKER_IMAGE)
+            this.historical = verifyImagePlatformMatchesJvmRuntime(new GenericContainer<>(DRUID_DOCKER_IMAGE)
                     .withExposedPorts(DRUID_HISTORICAL_PORT)
                     .withNetwork(network)
                     .withCommand("historical")
@@ -148,10 +149,10 @@ public class TestingDruidServer
                     .withCopyFileToContainer(
                             forClasspathResource("historical-jvm.config"),
                             "/opt/druid/conf/druid/cluster/data/historical/jvm.config")
-                    .waitingFor(Wait.forHttp("/status/selfDiscovered"));
+                    .waitingFor(Wait.forHttp("/status/selfDiscovered")));
             historical.start();
 
-            this.middleManager = new GenericContainer<>(DRUID_DOCKER_IMAGE)
+            this.middleManager = verifyImagePlatformMatchesJvmRuntime(new GenericContainer<>(DRUID_DOCKER_IMAGE)
                     .withExposedPorts(DRUID_MIDDLE_MANAGER_PORT)
                     .withNetwork(network)
                     .withCommand("middleManager")
@@ -168,7 +169,7 @@ public class TestingDruidServer
                     .withCopyFileToContainer(
                             forClasspathResource("middleManager-jvm.config"),
                             "/opt/druid/conf/druid/cluster/data/middleManager/jvm.config")
-                    .waitingFor(Wait.forHttp("/status/selfDiscovered"));
+                    .waitingFor(Wait.forHttp("/status/selfDiscovered")));
             middleManager.start();
         }
         catch (Exception e) {

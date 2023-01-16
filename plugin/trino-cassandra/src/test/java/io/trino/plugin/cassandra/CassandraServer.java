@@ -43,6 +43,7 @@ import static com.datastax.oss.driver.api.core.config.DefaultDriverOption.PROTOC
 import static com.datastax.oss.driver.api.core.config.DefaultDriverOption.REQUEST_TIMEOUT;
 import static com.google.common.io.Resources.getResource;
 import static io.trino.plugin.cassandra.CassandraTestingUtils.CASSANDRA_TYPE_MANAGER;
+import static io.trino.testing.containers.TestContainers.verifyImagePlatformMatchesJvmRuntime;
 import static java.lang.String.format;
 import static java.nio.charset.StandardCharsets.UTF_8;
 import static java.nio.file.Files.createDirectory;
@@ -84,11 +85,12 @@ public class CassandraServer
     {
         log.info("Starting cassandra...");
 
-        this.dockerContainer = new GenericContainer<>(imageName)
+        this.dockerContainer = verifyImagePlatformMatchesJvmRuntime(new GenericContainer<>(imageName)
                 .withExposedPorts(PORT)
                 .withCopyFileToContainer(forHostPath(prepareCassandraYaml(configFileName)), configPath)
                 .withEnv(environmentVariables)
-                .withStartupTimeout(java.time.Duration.ofMinutes(10));
+                .withStartupTimeout(java.time.Duration.ofMinutes(10)));
+
         this.dockerContainer.start();
 
         ProgrammaticDriverConfigLoaderBuilder driverConfigLoaderBuilder = DriverConfigLoader.programmaticBuilder();
