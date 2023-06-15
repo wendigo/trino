@@ -17,12 +17,10 @@ import org.testng.annotations.Test;
 
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
-import java.io.PrintStream;
 import java.nio.file.Files;
 
 import static io.trino.tests.product.launcher.cli.Launcher.execute;
 import static java.nio.charset.StandardCharsets.UTF_8;
-import static java.util.Objects.requireNonNull;
 import static org.assertj.core.api.Assertions.assertThat;
 
 @Test(singleThreaded = true)
@@ -102,36 +100,10 @@ public class TestInvocations
     {
         Launcher launcher = new Launcher();
         ByteArrayOutputStream out = new ByteArrayOutputStream();
-
-        try (CaptureOutput ignored = new CaptureOutput(out)) {
-            int exitCode = execute(launcher, new Launcher.LauncherBundle(), args);
-            return new InvocationResult(exitCode, out.toString(UTF_8));
-        }
+        int exitCode = execute(launcher, new Launcher.LauncherBundle(), out, args);
+        return new InvocationResult(exitCode, out.toString(UTF_8));
     }
 
     @SuppressWarnings("UnusedVariable")
     private record InvocationResult(int exitCode, String output) {}
-
-    private static class CaptureOutput
-            implements AutoCloseable
-    {
-        private final PrintStream originalOut;
-        private final PrintStream originalErr;
-
-        public CaptureOutput(ByteArrayOutputStream out)
-        {
-            PrintStream stream = new PrintStream(requireNonNull(out, "out is null"));
-            this.originalOut = System.out;
-            this.originalErr = System.err;
-            System.setOut(stream);
-            System.setErr(stream);
-        }
-
-        @Override
-        public void close()
-        {
-            System.setOut(originalOut);
-            System.setErr(originalErr);
-        }
-    }
 }
