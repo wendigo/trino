@@ -30,6 +30,7 @@ import io.trino.execution.executor.TaskExecutor;
 import io.trino.execution.executor.TaskHandle;
 import io.trino.execution.executor.scheduler.FairScheduler;
 import io.trino.spi.VersionEmbedder;
+import io.trino.util.LockUtils;
 import jakarta.annotation.PostConstruct;
 import jakarta.annotation.PreDestroy;
 
@@ -43,10 +44,12 @@ import java.util.Queue;
 import java.util.Set;
 import java.util.concurrent.ScheduledThreadPoolExecutor;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.locks.ReentrantLock;
 import java.util.function.DoubleSupplier;
 import java.util.function.Predicate;
 
 import static com.google.common.base.Preconditions.checkArgument;
+import static io.trino.util.LockUtils.closeable;
 import static java.lang.Math.max;
 import static java.lang.Math.min;
 import static java.util.Objects.requireNonNull;
@@ -71,6 +74,8 @@ public class ThreadPerDriverTaskExecutor
 
     @GuardedBy("this")
     private int runningLeafDrivers;
+
+    private final ReentrantLock thisLock = new ReentrantLock();
 
     @Inject
     public ThreadPerDriverTaskExecutor(TaskManagerConfig config, Tracer tracer, VersionEmbedder versionEmbedder)
@@ -97,72 +102,81 @@ public class ThreadPerDriverTaskExecutor
 
     @PostConstruct
     @Override
-    public synchronized void start()
+    public void start()
     {
-        scheduler.start();
-        backgroundTasks.scheduleWithFixedDelay(this::scheduleMoreLeafSplits, 0, 100, TimeUnit.MILLISECONDS);
-        backgroundTasks.scheduleWithFixedDelay(this::adjustConcurrency, 0, 10, TimeUnit.MILLISECONDS);
+        try (LockUtils.CloseableLock<ReentrantLock> ignored = closeable(thisLock)) {
+            scheduler.start();
+            backgroundTasks.scheduleWithFixedDelay(this::scheduleMoreLeafSplits, 0, 100, TimeUnit.MILLISECONDS);
+            backgroundTasks.scheduleWithFixedDelay(this::adjustConcurrency, 0, 10, TimeUnit.MILLISECONDS);
+        }
     }
 
     @PreDestroy
     @Override
-    public synchronized void stop()
+    public void stop()
     {
-        closed = true;
-        tasks.values().forEach(TaskEntry::destroy);
-        backgroundTasks.shutdownNow();
-        scheduler.close();
+        try (LockUtils.CloseableLock<ReentrantLock> ignored = closeable(thisLock)) {
+            closed = true;
+            tasks.values().forEach(TaskEntry::destroy);
+            backgroundTasks.shutdownNow();
+            scheduler.close();
+        }
     }
 
     @Override
-    public synchronized TaskHandle addTask(
+    public TaskHandle addTask(
             TaskId taskId,
             DoubleSupplier utilizationSupplier,
             int initialSplitConcurrency,
             Duration splitConcurrencyAdjustFrequency,
             OptionalInt maxDriversPerTask)
     {
-        checkArgument(!closed, "Executor is already closed");
-        TaskEntry task = new TaskEntry(
-                taskId,
-                scheduler,
-                versionEmbedder,
-                tracer,
-                initialSplitConcurrency,
-                utilizationSupplier);
-        tasks.put(taskId, task);
-        return task;
-    }
-
-    @Override
-    public synchronized void removeTask(TaskHandle handle)
-    {
-        TaskEntry entry = (TaskEntry) handle;
-        tasks.remove(entry.taskId());
-        if (!entry.isDestroyed()) {
-            entry.destroy();
+        try (LockUtils.CloseableLock<ReentrantLock> ignored = closeable(thisLock)) {
+            checkArgument(!closed, "Executor is already closed");
+            TaskEntry task = new TaskEntry(
+                    taskId,
+                    scheduler,
+                    versionEmbedder,
+                    tracer,
+                    initialSplitConcurrency,
+                    utilizationSupplier);
+            tasks.put(taskId, task);
+            return task;
         }
     }
 
     @Override
-    public synchronized List<ListenableFuture<Void>> enqueueSplits(TaskHandle handle, boolean intermediate, List<? extends SplitRunner> splits)
+    public void removeTask(TaskHandle handle)
     {
-        checkArgument(!closed, "Executor is already closed");
-
-        TaskEntry entry = (TaskEntry) handle;
-
-        List<ListenableFuture<Void>> futures = new ArrayList<>();
-        for (SplitRunner split : splits) {
-            if (intermediate) {
-                futures.add(entry.runSplit(split));
-            }
-            else {
-                futures.add(entry.enqueueLeafSplit(split));
+        try (LockUtils.CloseableLock<ReentrantLock> ignored = closeable(thisLock)) {
+            TaskEntry entry = (TaskEntry) handle;
+            tasks.remove(entry.taskId());
+            if (!entry.isDestroyed()) {
+                entry.destroy();
             }
         }
+    }
 
-        scheduleMoreLeafSplits();
-        return futures;
+    @Override
+    public List<ListenableFuture<Void>> enqueueSplits(TaskHandle handle, boolean intermediate, List<? extends SplitRunner> splits)
+    {
+        try (LockUtils.CloseableLock<ReentrantLock> ignored = closeable(thisLock)) {
+            checkArgument(!closed, "Executor is already closed");
+
+            TaskEntry entry = (TaskEntry) handle;
+
+            List<ListenableFuture<Void>> futures = new ArrayList<>();
+            for (SplitRunner split : splits) {
+                if (intermediate) {
+                    futures.add(entry.runSplit(split));
+                } else {
+                    futures.add(entry.enqueueLeafSplit(split));
+                }
+            }
+
+            scheduleMoreLeafSplits();
+            return futures;
+        }
     }
 
     private boolean scheduleLeafSplit(TaskEntry task)
@@ -175,33 +189,37 @@ public class ThreadPerDriverTaskExecutor
         return scheduled;
     }
 
-    private synchronized void leafSplitDone()
+    private void leafSplitDone()
     {
-        runningLeafDrivers--;
-        scheduleMoreLeafSplits();
+        try (LockUtils.CloseableLock<ReentrantLock> ignored = closeable(thisLock)) {
+            runningLeafDrivers--;
+            scheduleMoreLeafSplits();
+        }
     }
 
-    private synchronized void scheduleMoreLeafSplits()
+    private void scheduleMoreLeafSplits()
     {
-        // schedule minimum guaranteed leaf drivers for each task
-        for (TaskEntry task : tasks.values()) {
-            int target = max(0, minDriversPerTask - task.runningLeafSplits());
-            for (int i = 0; i < target; i++) {
-                if (!scheduleLeafSplit(task)) {
-                    break;
+        try (LockUtils.CloseableLock<ReentrantLock> ignored = closeable(thisLock)) {
+            // schedule minimum guaranteed leaf drivers for each task
+            for (TaskEntry task : tasks.values()) {
+                int target = max(0, minDriversPerTask - task.runningLeafSplits());
+                for (int i = 0; i < target; i++) {
+                    if (!scheduleLeafSplit(task)) {
+                        break;
+                    }
                 }
             }
-        }
 
-        // schedule additional drivers up to the target global leaf drivers
-        Queue<TaskEntry> queue = new ArrayDeque<>(tasks.values());
-        int target = targetGlobalLeafDrivers - runningLeafDrivers;
-        for (int i = 0; i < target && !queue.isEmpty(); i++) {
-            TaskEntry task = queue.poll();
-            if (task.runningLeafSplits() < min(task.targetConcurrency(), maxDriversPerTask)) {
-                scheduleLeafSplit(task);
-                if (task.hasPendingLeafSplits()) {
-                    queue.add(task);
+            // schedule additional drivers up to the target global leaf drivers
+            Queue<TaskEntry> queue = new ArrayDeque<>(tasks.values());
+            int target = targetGlobalLeafDrivers - runningLeafDrivers;
+            for (int i = 0; i < target && !queue.isEmpty(); i++) {
+                TaskEntry task = queue.poll();
+                if (task.runningLeafSplits() < min(task.targetConcurrency(), maxDriversPerTask)) {
+                    scheduleLeafSplit(task);
+                    if (task.hasPendingLeafSplits()) {
+                        queue.add(task);
+                    }
                 }
             }
         }

@@ -47,6 +47,7 @@ import io.trino.sql.planner.PlanFragment;
 import io.trino.sql.planner.plan.DynamicFilterId;
 import io.trino.sql.planner.plan.PlanNodeId;
 import io.trino.tracing.TrinoAttributes;
+import io.trino.util.LockUtils;
 import jakarta.annotation.Nullable;
 import org.joda.time.DateTime;
 
@@ -61,6 +62,7 @@ import java.util.concurrent.ExecutorService;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.concurrent.atomic.AtomicReference;
+import java.util.concurrent.locks.ReentrantLock;
 import java.util.function.Consumer;
 
 import static com.google.common.base.Preconditions.checkArgument;
@@ -76,6 +78,7 @@ import static io.trino.execution.TaskState.FAILING;
 import static io.trino.execution.TaskState.FINISHED;
 import static io.trino.execution.TaskState.RUNNING;
 import static io.trino.util.Failures.toFailures;
+import static io.trino.util.LockUtils.closeable;
 import static java.lang.String.format;
 import static java.util.Objects.requireNonNull;
 import static java.util.concurrent.TimeUnit.MILLISECONDS;
@@ -100,8 +103,11 @@ public class SqlTask
     private final AtomicReference<DateTime> lastHeartbeat = new AtomicReference<>(DateTime.now());
     private final AtomicLong taskStatusVersion = new AtomicLong(TaskStatus.STARTING_VERSION);
     private final FutureStateChange<?> taskStatusVersionChange = new FutureStateChange<>();
+
+    private final ReentrantLock thisLock = new ReentrantLock();
+
     // Must be synchronized when updating the current task holder reference, but not when only reading the current reference value
-    private final Object taskHolderLock = new Object();
+    private final ReentrantLock taskHolderLock = new ReentrantLock();
     @GuardedBy("taskHolderLock")
     private final AtomicReference<TaskHolder> taskHolderReference = new AtomicReference<>(new TaskHolder());
     private final AtomicBoolean needsPlan = new AtomicBoolean(true);
@@ -178,7 +184,7 @@ public class SqlTask
             if (newState.isTerminatingOrDone()) {
                 if (newState.isTerminating()) {
                     // This section must be synchronized to lock out any threads that might be attempting to create a SqlTaskExecution
-                    synchronized (taskHolderLock) {
+                    try (LockUtils.CloseableLock<ReentrantLock> ignored = closeable(taskHolderLock)) {
                         // If a SqlTaskExecution exists, it decides when termination is complete. Otherwise, we can mark termination completed immediately
                         if (taskHolderReference.get().getTaskExecution() == null) {
                             taskStateMachine.terminationComplete();
@@ -192,7 +198,7 @@ public class SqlTask
                     }
                     // store final task info
                     boolean finished = false;
-                    synchronized (taskHolderLock) {
+                    try (LockUtils.CloseableLock<ReentrantLock> ignored = closeable(taskHolderLock)) {
                         TaskHolder taskHolder = taskHolderReference.get();
                         if (!taskHolder.isFinished()) {
                             TaskHolder newHolder = new TaskHolder(
@@ -299,10 +305,12 @@ public class SqlTask
         return taskHolderReference.get().acknowledgeAndGetNewDynamicFilterDomains(callersDynamicFiltersVersion);
     }
 
-    private synchronized void notifyStatusChanged()
+    private void notifyStatusChanged()
     {
-        taskStatusVersion.incrementAndGet();
-        taskStatusVersionChange.complete(null, taskNotificationExecutor);
+        try (LockUtils.CloseableLock<ReentrantLock> ignored = closeable(thisLock)) {
+            taskStatusVersion.incrementAndGet();
+            taskStatusVersionChange.complete(null, taskNotificationExecutor);
+        }
     }
 
     private TaskStatus createTaskStatus(TaskHolder taskHolder)
@@ -454,28 +462,32 @@ public class SqlTask
                 needsPlan.get());
     }
 
-    public synchronized ListenableFuture<TaskStatus> getTaskStatus(long callersCurrentVersion)
+    public ListenableFuture<TaskStatus> getTaskStatus(long callersCurrentVersion)
     {
-        if (callersCurrentVersion < taskStatusVersion.get() || taskHolderReference.get().isFinished()) {
-            // return immediately if caller has older task status version or final task info is available
-            return immediateFuture(getTaskStatus());
-        }
+        try (LockUtils.CloseableLock<ReentrantLock> ignored = closeable(thisLock)) {
+            if (callersCurrentVersion < taskStatusVersion.get() || taskHolderReference.get().isFinished()) {
+                // return immediately if caller has older task status version or final task info is available
+                return immediateFuture(getTaskStatus());
+            }
 
-        // At this point taskHolderReference.get().isFinished() might become true. However notifyStatusChanged()
-        // is synchronized therefore notification for new listener won't be lost.
-        return Futures.transform(taskStatusVersionChange.createNewListener(), input -> getTaskStatus(), directExecutor());
+            // At this point taskHolderReference.get().isFinished() might become true. However notifyStatusChanged()
+            // is synchronized therefore notification for new listener won't be lost.
+            return Futures.transform(taskStatusVersionChange.createNewListener(), input -> getTaskStatus(), directExecutor());
+        }
     }
 
-    public synchronized ListenableFuture<TaskInfo> getTaskInfo(long callersCurrentVersion)
+    public ListenableFuture<TaskInfo> getTaskInfo(long callersCurrentVersion)
     {
-        if (callersCurrentVersion < taskStatusVersion.get() || taskHolderReference.get().isFinished()) {
-            // return immediately if caller has older task status version or final task info is available
-            return immediateFuture(getTaskInfo());
-        }
+        try (LockUtils.CloseableLock<ReentrantLock> ignored = closeable(thisLock)) {
+            if (callersCurrentVersion < taskStatusVersion.get() || taskHolderReference.get().isFinished()) {
+                // return immediately if caller has older task status version or final task info is available
+                return immediateFuture(getTaskInfo());
+            }
 
-        // At this point taskHolderReference.get().isFinished() might become true. However notifyStatusChanged()
-        // is synchronized therefore notification for new listener won't be lost.
-        return Futures.transform(taskStatusVersionChange.createNewListener(), input -> getTaskInfo(), directExecutor());
+            // At this point taskHolderReference.get().isFinished() might become true. However notifyStatusChanged()
+            // is synchronized therefore notification for new listener won't be lost.
+            return Futures.transform(taskStatusVersionChange.createNewListener(), input -> getTaskInfo(), directExecutor());
+        }
     }
 
     public TaskInfo updateTask(
@@ -531,7 +543,7 @@ public class SqlTask
     private SqlTaskExecution tryCreateSqlTaskExecution(Session session, Span stageSpan, PlanFragment fragment)
     {
         SqlTaskExecution execution;
-        synchronized (taskHolderLock) {
+        try (LockUtils.CloseableLock<ReentrantLock> ignored = closeable(taskHolderLock)) {
             // Recheck holder for task execution after acquiring the lock
             TaskHolder taskHolder = taskHolderReference.get();
             if (taskHolder.isFinished()) {

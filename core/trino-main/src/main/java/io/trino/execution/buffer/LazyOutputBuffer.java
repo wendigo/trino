@@ -28,6 +28,7 @@ import io.trino.memory.context.LocalMemoryContext;
 import io.trino.spi.exchange.ExchangeManager;
 import io.trino.spi.exchange.ExchangeSink;
 import io.trino.spi.exchange.ExchangeSinkInstanceHandle;
+import io.trino.util.LockUtils;
 import jakarta.annotation.Nullable;
 
 import java.util.ArrayList;
@@ -36,6 +37,7 @@ import java.util.List;
 import java.util.Optional;
 import java.util.Set;
 import java.util.concurrent.Executor;
+import java.util.concurrent.locks.ReentrantLock;
 import java.util.function.Supplier;
 
 import static com.google.common.base.Preconditions.checkArgument;
@@ -43,6 +45,7 @@ import static com.google.common.base.Preconditions.checkState;
 import static com.google.common.util.concurrent.Futures.immediateFuture;
 import static io.trino.execution.buffer.BufferResult.emptyResults;
 import static io.trino.execution.buffer.BufferState.FINISHED;
+import static io.trino.util.LockUtils.closeable;
 import static java.util.Objects.requireNonNull;
 
 public class LazyOutputBuffer
@@ -57,15 +60,17 @@ public class LazyOutputBuffer
     private final Runnable notifyStatusChanged;
     private final ExchangeManagerRegistry exchangeManagerRegistry;
 
+    private final ReentrantLock thisLock = new ReentrantLock();
+
     // Note: this is a write once field, so an unsynchronized volatile read that returns a non-null value is safe, but if a null value is observed instead
     // a subsequent synchronized read is required to ensure the writing thread can complete any in-flight initialization
-    @GuardedBy("this")
+    @GuardedBy("thisLock")
     private volatile OutputBuffer delegate;
 
-    @GuardedBy("this")
+    @GuardedBy("thisLock")
     private final Set<OutputBufferId> destroyedBuffers = new HashSet<>();
 
-    @GuardedBy("this")
+    @GuardedBy("thisLock")
     private final List<PendingRead> pendingReads = new ArrayList<>();
 
     public LazyOutputBuffer(
@@ -157,7 +162,7 @@ public class LazyOutputBuffer
         List<PendingRead> pendingReads = ImmutableList.of();
         OutputBuffer outputBuffer = delegate;
         if (outputBuffer == null) {
-            synchronized (this) {
+            try (LockUtils.CloseableLock<ReentrantLock> ignored = closeable(thisLock)) {
                 outputBuffer = delegate;
                 if (outputBuffer == null) {
                     // ignore set output if buffer was already destroyed or failed
@@ -206,7 +211,7 @@ public class LazyOutputBuffer
     {
         OutputBuffer outputBuffer = delegate;
         if (outputBuffer == null) {
-            synchronized (this) {
+            try (LockUtils.CloseableLock<ReentrantLock> ignored = closeable(thisLock)) {
                 if (delegate == null) {
                     if (stateMachine.getState().isTerminal()) {
                         // only set complete when finished, otherwise
@@ -236,7 +241,7 @@ public class LazyOutputBuffer
     {
         OutputBuffer outputBuffer = delegate;
         if (outputBuffer == null) {
-            synchronized (this) {
+            try (LockUtils.CloseableLock<ReentrantLock> ignored = closeable(thisLock)) {
                 if (delegate == null) {
                     destroyedBuffers.add(bufferId);
                     // Normally, we should free any pending readers for this buffer,
@@ -283,7 +288,7 @@ public class LazyOutputBuffer
         List<PendingRead> pendingReads = ImmutableList.of();
         OutputBuffer outputBuffer = delegate;
         if (outputBuffer == null) {
-            synchronized (this) {
+            try (LockUtils.CloseableLock<ReentrantLock> ignored = closeable(thisLock)) {
                 if (delegate == null) {
                     // ignore destroy if the buffer already in a terminal state.
                     if (!stateMachine.finish()) {
@@ -314,7 +319,7 @@ public class LazyOutputBuffer
         List<PendingRead> pendingReads = ImmutableList.of();
         OutputBuffer outputBuffer = delegate;
         if (outputBuffer == null) {
-            synchronized (this) {
+            try (LockUtils.CloseableLock<ReentrantLock> ignored = closeable(thisLock)) {
                 if (delegate == null) {
                     // ignore abort if the buffer already in a terminal state.
                     if (!stateMachine.abort()) {
@@ -361,7 +366,7 @@ public class LazyOutputBuffer
     {
         OutputBuffer outputBuffer = delegate;
         if (outputBuffer == null) {
-            synchronized (this) {
+            try (LockUtils.CloseableLock<ReentrantLock> ignored = closeable(thisLock)) {
                 outputBuffer = delegate;
             }
         }
