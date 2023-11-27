@@ -18,7 +18,6 @@ import com.google.inject.Key;
 import com.google.inject.Module;
 import com.google.inject.Provider;
 import com.google.inject.Provides;
-import com.google.inject.Scopes;
 import com.google.inject.Singleton;
 import io.airlift.log.Logger;
 import io.trino.plugin.base.CatalogName;
@@ -29,6 +28,7 @@ import io.trino.plugin.jdbc.jmx.StatisticsAwareJdbcClient;
 import org.weakref.jmx.guice.MBeanModule;
 
 import static com.google.common.reflect.Reflection.newProxy;
+import static io.trino.plugin.base.inject.DecoratorBinder.newDecoratorBinder;
 import static java.lang.String.format;
 import static org.weakref.jmx.guice.ExportBinder.newExporter;
 
@@ -40,7 +40,9 @@ public class JdbcDiagnosticModule
     {
         binder.install(new MBeanServerModule());
         binder.install(new MBeanModule());
-        binder.bind(StatisticsAwareConnectionFactory.class).in(Scopes.SINGLETON);
+
+        newDecoratorBinder(binder, ConnectionFactory.class, ForBaseJdbc.class)
+                .addBinding(StatisticsAwareConnectionFactory.FactoryDecorator.class);
 
         Provider<CatalogName> catalogName = binder.getProvider(CatalogName.class);
         newExporter(binder).export(Key.get(JdbcClient.class, StatsCollecting.class))
