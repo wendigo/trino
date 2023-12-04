@@ -19,6 +19,7 @@ import com.google.common.util.concurrent.ListenableFuture;
 import com.google.common.util.concurrent.ListeningExecutorService;
 import com.google.common.util.concurrent.MoreExecutors;
 import io.trino.Session;
+import io.trino.execution.QueryManager;
 import io.trino.execution.SqlTaskManager;
 import io.trino.server.BasicQueryInfo;
 import io.trino.server.testing.TestingTrinoServer;
@@ -36,7 +37,6 @@ import java.util.List;
 import java.util.Map;
 import java.util.concurrent.TimeUnit;
 
-import static com.google.common.collect.MoreCollectors.onlyElement;
 import static io.trino.execution.QueryState.FINISHED;
 import static io.trino.memory.TestMemoryManager.createQueryRunner;
 import static io.trino.testing.TestingSession.testSessionBuilder;
@@ -116,7 +116,7 @@ public class TestGracefulShutdown
 
             TestShutdownAction shutdownAction = (TestShutdownAction) worker.getShutdownAction();
             shutdownAction.waitForShutdownComplete(SHUTDOWN_TIMEOUT_MILLIS);
-            assertThat(shutdownAction.isWorkerShutdown()).isTrue();
+            assertThat(shutdownAction.isNodeShutdown()).isTrue();
         }
     }
 
@@ -124,16 +124,45 @@ public class TestGracefulShutdown
     public void testCoordinatorShutdown()
             throws Exception
     {
-        try (DistributedQueryRunner queryRunner = createQueryRunner(TINY_SESSION, ImmutableMap.of())) {
-            @SuppressWarnings("resource")
-            TestingTrinoServer coordinator = queryRunner.getServers()
-                    .stream()
-                    .filter(TestingTrinoServer::isCoordinator)
-                    .collect(onlyElement());
+        Map<String, String> properties = ImmutableMap.<String, String>builder()
+                .put("node-scheduler.include-coordinator", "false")
+                .put("shutdown.grace-period", "10s")
+                .buildOrThrow();
 
-            assertThatThrownBy(coordinator.getGracefulShutdownHandler()::requestShutdown)
-                    .isInstanceOf(UnsupportedOperationException.class)
-                    .hasMessage("Cannot shutdown coordinator");
+        int queriesCount = 5;
+        try (DistributedQueryRunner queryRunner = createQueryRunner(TINY_SESSION, properties)) {
+            List<ListenableFuture<Void>> queryFutures = new ArrayList<>();
+            for (int i = 0; i < queriesCount; i++) {
+                queryFutures.add(Futures.submit(
+                        () -> {
+                            queryRunner.execute("SELECT COUNT(*), clerk FROM orders GROUP BY clerk");
+                        },
+                        executor));
+            }
+            @SuppressWarnings("resource")
+            TestingTrinoServer coordinator = queryRunner.getCoordinator();
+            QueryManager queryManager = coordinator.getQueryManager();
+
+            // wait until queries show up on the coordinator
+            while (queryManager.getQueries().size() != queriesCount) {
+                MILLISECONDS.sleep(500);
+            }
+
+            coordinator.getGracefulShutdownHandler().requestShutdown();
+
+            // New query submission will be rejected
+            assertThatThrownBy(() -> queryRunner.execute("SELECT COUNT(*), clerk FROM orders GROUP BY clerk"))
+                    .hasMessageContaining("Coordinator is shutting down");
+
+            Futures.allAsList(queryFutures).get(); // Wait for all queries to complete
+            List<BasicQueryInfo> queryInfos = queryManager.getQueries();
+            for (BasicQueryInfo info : queryInfos) {
+                assertThat(info.getState()).isEqualTo(FINISHED);
+            }
+
+            TestShutdownAction shutdownAction = (TestShutdownAction) coordinator.getShutdownAction();
+            shutdownAction.waitForShutdownComplete(SHUTDOWN_TIMEOUT_MILLIS);
+            assertThat(shutdownAction.isNodeShutdown()).isTrue();
         }
     }
 }

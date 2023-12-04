@@ -21,13 +21,25 @@ public final class StartupStatus
 {
     private final AtomicBoolean startupComplete = new AtomicBoolean();
 
+    private final AtomicBoolean shutdownStarted = new AtomicBoolean();
+
     public void startupComplete()
     {
         checkState(startupComplete.compareAndSet(false, true), "Server startup already marked as complete");
     }
 
+    public void shutdownStarted()
+    {
+        checkState(shutdownStarted.compareAndSet(false, true), "Server shutdown already marked as started");
+    }
+
     public boolean isStartupComplete()
     {
         return startupComplete.get();
+    }
+
+    public boolean isShutdownStarted()
+    {
+        return shutdownStarted.get();
     }
 }
