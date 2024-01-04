@@ -45,6 +45,7 @@ import java.util.List;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.TimeUnit;
 
+import static io.trino.execution.buffer.CompressionCodec.LZ4;
 import static io.trino.memory.context.AggregatedMemoryContext.newSimpleAggregatedMemoryContext;
 import static io.trino.spi.type.BigintType.BIGINT;
 import static io.trino.spi.type.DoubleType.DOUBLE;
@@ -118,6 +119,7 @@ public class BenchmarkBinaryFileSpiller
                     ImmutableList.of(SPILL_PATH),
                     1.0,
                     compressionEnabled,
+                    LZ4,
                     encryptionEnabled);
             spillerFactory = new GenericSpillerFactory(singleStreamSpillerFactory);
             pages = createInputPages();

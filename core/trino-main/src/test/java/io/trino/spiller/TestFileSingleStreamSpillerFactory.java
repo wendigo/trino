@@ -41,6 +41,7 @@ import static com.google.common.io.MoreFiles.deleteRecursively;
 import static com.google.common.io.MoreFiles.listFiles;
 import static com.google.common.io.RecursiveDeleteOption.ALLOW_INSECURE;
 import static com.google.common.util.concurrent.Futures.getUnchecked;
+import static io.trino.execution.buffer.CompressionCodec.LZ4;
 import static io.trino.memory.context.AggregatedMemoryContext.newSimpleAggregatedMemoryContext;
 import static io.trino.spi.type.BigintType.BIGINT;
 import static io.trino.spiller.FileSingleStreamSpillerFactory.SPILL_FILE_PREFIX;
@@ -280,6 +281,7 @@ public class TestFileSingleStreamSpillerFactory
                 paths,
                 maxUsedSpaceThreshold,
                 false,
+                LZ4,
                 false);
     }
 }

@@ -14,9 +14,13 @@
 package io.trino.spiller;
 
 import io.airlift.configuration.Config;
+import io.airlift.configuration.ConfigDescription;
 import io.airlift.configuration.LegacyConfig;
 import io.airlift.units.DataSize;
+import io.trino.execution.buffer.CompressionCodec;
 import jakarta.validation.constraints.NotNull;
+
+import static io.trino.execution.buffer.CompressionCodec.LZ4;
 
 public class NodeSpillConfig
 {
@@ -24,6 +28,7 @@ public class NodeSpillConfig
     private DataSize queryMaxSpillPerNode = DataSize.of(100, DataSize.Unit.GIGABYTE);
 
     private boolean spillCompressionEnabled;
+    private CompressionCodec spillCompressionCodec = LZ4;
     private boolean spillEncryptionEnabled;
 
     @NotNull
@@ -64,6 +69,19 @@ public class NodeSpillConfig
     public NodeSpillConfig setSpillCompressionEnabled(boolean spillCompressionEnabled)
     {
         this.spillCompressionEnabled = spillCompressionEnabled;
+        return this;
+    }
+
+    public CompressionCodec getSpillCompressionCodec()
+    {
+        return spillCompressionCodec;
+    }
+
+    @Config("spill-compression-codec")
+    @ConfigDescription("Compression codec used for data in spills")
+    public NodeSpillConfig setSpillCompressionCodec(CompressionCodec spillCompressionCodec)
+    {
+        this.spillCompressionCodec = spillCompressionCodec;
         return this;
     }
 

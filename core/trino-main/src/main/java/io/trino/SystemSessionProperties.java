@@ -20,6 +20,7 @@ import io.airlift.units.Duration;
 import io.trino.execution.DynamicFilterConfig;
 import io.trino.execution.QueryManagerConfig;
 import io.trino.execution.TaskManagerConfig;
+import io.trino.execution.buffer.CompressionCodec;
 import io.trino.execution.scheduler.NodeSchedulerConfig;
 import io.trino.memory.MemoryManagerConfig;
 import io.trino.memory.NodeMemoryConfig;
@@ -108,6 +109,7 @@ public final class SystemSessionProperties
     public static final String ITERATIVE_OPTIMIZER_TIMEOUT = "iterative_optimizer_timeout";
     public static final String ENABLE_FORCED_EXCHANGE_BELOW_GROUP_ID = "enable_forced_exchange_below_group_id";
     public static final String EXCHANGE_COMPRESSION = "exchange_compression";
+    public static final String EXCHANGE_COMPRESSION_CODEC = "exchange_compression_codec";
     public static final String ENABLE_INTERMEDIATE_AGGREGATIONS = "enable_intermediate_aggregations";
     public static final String PUSH_AGGREGATION_THROUGH_OUTER_JOIN = "push_aggregation_through_outer_join";
     public static final String PUSH_PARTIAL_AGGREGATION_THROUGH_JOIN = "push_partial_aggregation_through_join";
@@ -509,6 +511,12 @@ public final class SystemSessionProperties
                         EXCHANGE_COMPRESSION,
                         "Enable compression in exchanges",
                         featuresConfig.isExchangeCompressionEnabled(),
+                        false),
+                enumProperty(
+                        EXCHANGE_COMPRESSION_CODEC,
+                        "Compression codec used for data in exchanges",
+                        CompressionCodec.class,
+                        featuresConfig.getExchangeCompressionCodec(),
                         false),
                 booleanProperty(
                         ENABLE_INTERMEDIATE_AGGREGATIONS,
@@ -1331,6 +1339,11 @@ public final class SystemSessionProperties
     public static boolean isExchangeCompressionEnabled(Session session)
     {
         return session.getSystemProperty(EXCHANGE_COMPRESSION, Boolean.class);
+    }
+
+    public static CompressionCodec getExchangeCompressionCodec(Session session)
+    {
+        return session.getSystemProperty(EXCHANGE_COMPRESSION_CODEC, CompressionCodec.class);
     }
 
     public static boolean isEnableIntermediateAggregations(Session session)

@@ -22,6 +22,7 @@ import com.google.inject.Inject;
 import io.airlift.log.Logger;
 import io.trino.FeaturesConfig;
 import io.trino.cache.NonKeyEvictableLoadingCache;
+import io.trino.execution.buffer.CompressionCodec;
 import io.trino.execution.buffer.PagesSerdeFactory;
 import io.trino.memory.context.LocalMemoryContext;
 import io.trino.operator.SpillContext;
@@ -93,6 +94,7 @@ public class FileSingleStreamSpillerFactory
                 featuresConfig.getSpillerSpillPaths(),
                 featuresConfig.getSpillMaxUsedSpaceThreshold(),
                 nodeSpillConfig.isSpillCompressionEnabled(),
+                nodeSpillConfig.getSpillCompressionCodec(),
                 nodeSpillConfig.isSpillEncryptionEnabled());
     }
 
@@ -104,9 +106,10 @@ public class FileSingleStreamSpillerFactory
             List<Path> spillPaths,
             double maxUsedSpaceThreshold,
             boolean spillCompressionEnabled,
+            CompressionCodec compressionCodec,
             boolean spillEncryptionEnabled)
     {
-        this.serdeFactory = new PagesSerdeFactory(blockEncodingSerde, spillCompressionEnabled);
+        this.serdeFactory = new PagesSerdeFactory(blockEncodingSerde, spillCompressionEnabled, compressionCodec);
         this.executor = requireNonNull(executor, "executor is null");
         this.spillerStats = requireNonNull(spillerStats, "spillerStats cannot be null");
         requireNonNull(spillPaths, "spillPaths is null");

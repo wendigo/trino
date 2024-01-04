@@ -42,6 +42,7 @@ import static com.google.common.io.MoreFiles.deleteRecursively;
 import static com.google.common.io.MoreFiles.listFiles;
 import static com.google.common.io.RecursiveDeleteOption.ALLOW_INSECURE;
 import static com.google.common.util.concurrent.MoreExecutors.listeningDecorator;
+import static io.trino.execution.buffer.CompressionCodec.LZ4;
 import static io.trino.execution.buffer.PagesSerdeUtil.isSerializedPageCompressed;
 import static io.trino.execution.buffer.PagesSerdeUtil.isSerializedPageEncrypted;
 import static io.trino.memory.context.AggregatedMemoryContext.newSimpleAggregatedMemoryContext;
@@ -117,6 +118,7 @@ public class TestFileSingleStreamSpiller
                 ImmutableList.of(spillPath.toPath()),
                 1.0,
                 compression,
+                LZ4,
                 encryption);
         LocalMemoryContext memoryContext = newSimpleAggregatedMemoryContext().newLocalMemoryContext("test");
         SingleStreamSpiller singleStreamSpiller = spillerFactory.create(TYPES, bytes -> {}, memoryContext);

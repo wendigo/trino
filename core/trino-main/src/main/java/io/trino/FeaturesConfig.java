@@ -22,6 +22,7 @@ import io.airlift.configuration.DefunctConfig;
 import io.airlift.configuration.LegacyConfig;
 import io.airlift.units.DataSize;
 import io.airlift.units.MaxDataSize;
+import io.trino.execution.buffer.CompressionCodec;
 import io.trino.sql.analyzer.RegexLibrary;
 import jakarta.validation.constraints.DecimalMax;
 import jakarta.validation.constraints.DecimalMin;
@@ -35,6 +36,7 @@ import java.util.List;
 import static com.google.common.collect.ImmutableList.toImmutableList;
 import static io.airlift.units.DataSize.Unit.KILOBYTE;
 import static io.airlift.units.DataSize.succinctBytes;
+import static io.trino.execution.buffer.CompressionCodec.LZ4;
 import static io.trino.sql.analyzer.RegexLibrary.JONI;
 
 @DefunctConfig({
@@ -81,6 +83,7 @@ public class FeaturesConfig
      * default value is overwritten for fault tolerant execution in {@link #applyFaultTolerantExecutionDefaults()}}
      */
     private boolean exchangeCompressionEnabled;
+    private CompressionCodec exchangeCompressionCodec = LZ4;
     private boolean pagesIndexEagerCompactionEnabled;
     private boolean omitDateTimeTypePrecision;
     private int maxRecursionDepth = 10;
@@ -337,6 +340,19 @@ public class FeaturesConfig
     public FeaturesConfig setExchangeCompressionEnabled(boolean exchangeCompressionEnabled)
     {
         this.exchangeCompressionEnabled = exchangeCompressionEnabled;
+        return this;
+    }
+
+    public CompressionCodec getExchangeCompressionCodec()
+    {
+        return exchangeCompressionCodec;
+    }
+
+    @Config("exchange.compression-codec")
+    @ConfigDescription("Compression codec used for data in exchanges")
+    public FeaturesConfig setExchangeCompressionCodec(CompressionCodec exchangeCompressionCodec)
+    {
+        this.exchangeCompressionCodec = exchangeCompressionCodec;
         return this;
     }
 
