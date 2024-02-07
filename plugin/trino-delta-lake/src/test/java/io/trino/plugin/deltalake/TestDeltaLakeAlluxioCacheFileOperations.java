@@ -18,9 +18,11 @@ import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.ImmutableMultiset;
 import com.google.common.collect.Multiset;
 import io.opentelemetry.api.common.Attributes;
+import io.opentelemetry.sdk.trace.data.SpanData;
 import io.trino.Session;
 import io.trino.testing.AbstractTestQueryFramework;
 import io.trino.testing.DistributedQueryRunner;
+import io.trino.testing.QueryRunner;
 import org.intellij.lang.annotations.Language;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.parallel.Execution;
@@ -28,6 +30,7 @@ import org.junit.jupiter.api.parallel.ExecutionMode;
 
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.List;
 import java.util.Map;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
@@ -190,13 +193,13 @@ public class TestDeltaLakeAlluxioCacheFileOperations
     {
         assertUpdate("CALL system.flush_metadata_cache()");
         DistributedQueryRunner queryRunner = getDistributedQueryRunner();
-        queryRunner.executeWithPlan(queryRunner.getDefaultSession(), query);
-        assertMultisetsEqual(getCacheOperations(), expectedCacheAccesses);
+        List<SpanData> spans = queryRunner.executeWithPlan(queryRunner.getDefaultSession(), query).spans();
+        assertMultisetsEqual(getCacheOperations(spans), expectedCacheAccesses);
     }
 
-    private Multiset<CacheOperation> getCacheOperations()
+    private Multiset<CacheOperation> getCacheOperations(List<SpanData> spans)
     {
-        return getQueryRunner().getSpans().stream()
+        return spans.stream()
                 .filter(span -> span.getName().startsWith("Alluxio."))
                 .filter(span -> !isTrinoSchemaOrPermissions(requireNonNull(span.getAttributes().get(CACHE_FILE_LOCATION))))
                 .map(span -> CacheOperation.create(span.getName(), span.getAttributes()))

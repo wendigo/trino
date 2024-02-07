@@ -58,7 +58,6 @@ import static java.lang.Math.toIntExact;
 import static java.util.Objects.requireNonNull;
 import static java.util.stream.Collectors.toCollection;
 
-// single-threaded AccessTrackingFileSystemFactory is shared mutable state
 @Execution(ExecutionMode.SAME_THREAD)
 public class TestDeltaLakeFileOperations
         extends AbstractTestQueryFramework
@@ -764,9 +763,8 @@ public class TestDeltaLakeFileOperations
     {
         assertUpdate("CALL system.flush_metadata_cache()");
 
-        getDistributedQueryRunner().executeWithPlan(session, query);
-        List<SpanData> spanData = getDistributedQueryRunner().getSpans();
-        assertMultisetsEqual(getOperations(spanData), expectedAccesses);
+        List<SpanData> spans = getDistributedQueryRunner().executeWithPlan(session, query).spans();
+        assertMultisetsEqual(getOperations(spans), expectedAccesses);
     }
 
     private Multiset<FileOperation> getOperations(List<SpanData> spanData)

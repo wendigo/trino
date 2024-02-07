@@ -107,7 +107,7 @@ public final class StandaloneQueryRunner
     public MaterializedResultWithPlan executeWithPlan(Session session, String sql)
     {
         DirectTrinoClient.Result result = executeInternal(session, sql);
-        return new MaterializedResultWithPlan(result.queryId(), server.getQueryPlan(result.queryId()), result.result());
+        return new MaterializedResultWithPlan(result.queryId(), server.getQueryPlan(result.queryId()), result.result(), result.spans().orElse(ImmutableList.of()));
     }
 
     private DirectTrinoClient.Result executeInternal(Session session, @Language("SQL") String sql)
@@ -115,13 +115,14 @@ public final class StandaloneQueryRunner
         lock.readLock().lock();
         try {
             spanExporter.reset();
-            return trinoClient.execute(session, sql);
+            return trinoClient.execute(session, sql).withSpans(spanExporter.getFinishedSpanItems());
         }
         catch (Throwable e) {
             e.addSuppressed(new Exception("SQL: " + sql));
             throw e;
         }
         finally {
+            spanExporter.reset();
             lock.readLock().unlock();
         }
     }

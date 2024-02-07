@@ -683,8 +683,7 @@ public class TestIcebergGlueCatalogAccessOperations
         Map<GlueMetastoreMethod, Integer> countsBefore = Arrays.stream(GlueMetastoreMethod.values())
                 .collect(toImmutableMap(Function.identity(), method -> method.getInvocationCount(glueStats)));
 
-        getQueryRunner().execute(session, query);
-        List<SpanData> spans = getQueryRunner().getSpans();
+        List<SpanData> spans = getQueryRunner().executeWithPlan(session, query).spans();
 
         Map<GlueMetastoreMethod, Integer> countsAfter = Arrays.stream(GlueMetastoreMethod.values())
                 .collect(toImmutableMap(Function.identity(), method -> method.getInvocationCount(glueStats)));

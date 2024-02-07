@@ -485,7 +485,7 @@ public class DistributedQueryRunner
     public MaterializedResultWithPlan executeWithPlan(Session session, String sql)
     {
         ResultWithQueryId<MaterializedResult> result = executeInternal(session, sql);
-        return new MaterializedResultWithPlan(result.getQueryId(), coordinator.getQueryPlan(result.getQueryId()), result.getResult());
+        return new MaterializedResultWithPlan(result.getQueryId(), coordinator.getQueryPlan(result.getQueryId()), result.getResult(), result.getSpans());
     }
 
     private ResultWithQueryId<MaterializedResult> executeInternal(Session session, @Language("SQL") String sql)
@@ -493,13 +493,15 @@ public class DistributedQueryRunner
         lock.readLock().lock();
         try {
             spanExporter.reset();
-            return trinoClient.execute(session, sql);
+            return trinoClient.execute(session, sql)
+                    .withSpans(spanExporter.getFinishedSpanItems());
         }
         catch (Throwable e) {
             e.addSuppressed(new Exception("SQL: " + sql));
             throw e;
         }
         finally {
+            spanExporter.reset();
             lock.readLock().unlock();
         }
     }

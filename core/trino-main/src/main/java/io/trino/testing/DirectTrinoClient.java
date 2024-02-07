@@ -17,6 +17,7 @@ import com.google.common.collect.ImmutableList;
 import com.google.common.util.concurrent.ListenableFuture;
 import io.airlift.slice.Slice;
 import io.opentelemetry.api.trace.Span;
+import io.opentelemetry.sdk.trace.data.SpanData;
 import io.trino.Session;
 import io.trino.dispatcher.DispatchManager;
 import io.trino.dispatcher.DispatchQuery;
@@ -92,7 +93,7 @@ class DirectTrinoClient
         getQueryFuture(dispatchManager.waitForDispatched(queryId));
         DispatchQuery dispatchQuery = dispatchManager.getQuery(queryId);
         if (dispatchQuery.getState().isDone()) {
-            return new Result(queryId, toMaterializedRows(dispatchQuery, ImmutableList.of(), ImmutableList.of(), ImmutableList.of()));
+            return new Result(queryId, toMaterializedRows(dispatchQuery, ImmutableList.of(), ImmutableList.of(), ImmutableList.of()), Optional.empty());
         }
 
         // read all output data
@@ -132,7 +133,7 @@ class DirectTrinoClient
             getQueryFuture(queryManager.getStateChange(queryId, queryState));
         }
 
-        return new Result(queryId, toMaterializedRows(dispatchQuery, columnTypes.get(), columnNames.get(), pages));
+        return new Result(queryId, toMaterializedRows(dispatchQuery, columnTypes.get(), columnNames.get(), pages), Optional.empty());
     }
 
     private DirectExchangeClient createExchangeClient(DispatchQuery dispatchQuery)
@@ -215,12 +216,18 @@ class DirectTrinoClient
         }
     }
 
-    record Result(QueryId queryId, MaterializedResult result)
+    record Result(QueryId queryId, MaterializedResult result, Optional<List<SpanData>> spans)
     {
         Result
         {
             requireNonNull(queryId, "queryId is null");
             requireNonNull(result, "result is null");
+            requireNonNull(spans, "spans is null");
+        }
+
+        public Result withSpans(List<SpanData> spans)
+        {
+            return new Result(queryId, result, Optional.of(spans));
         }
     }
 }

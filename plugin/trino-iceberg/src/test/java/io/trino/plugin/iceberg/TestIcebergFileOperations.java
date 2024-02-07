@@ -808,9 +808,9 @@ public class TestIcebergFileOperations
 
     private synchronized void assertFileSystemAccesses(Session session, @Language("SQL") String query, Scope scope, Multiset<FileOperation> expectedAccesses)
     {
-        getDistributedQueryRunner().executeWithPlan(session, query);
+        List<SpanData> spans = getDistributedQueryRunner().executeWithPlan(session, query).spans();
         assertMultisetsEqual(
-                getOperations(getDistributedQueryRunner().getSpans()).stream()
+                getOperations(spans).stream()
                         .filter(scope)
                         .collect(toImmutableMultiset()),
                 expectedAccesses);

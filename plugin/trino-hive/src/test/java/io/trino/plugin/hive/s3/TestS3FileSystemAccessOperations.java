@@ -164,8 +164,8 @@ public class TestS3FileSystemAccessOperations
     private void assertFileSystemAccesses(Session session, @Language("SQL") String query, Multiset<String> expectedAccesses)
     {
         QueryRunner queryRunner = getDistributedQueryRunner();
-        queryRunner.executeWithPlan(session, query);
-        assertMultisetsEqual(getOperations(queryRunner.getSpans()), expectedAccesses);
+        List<SpanData> spans = queryRunner.executeWithPlan(session, query).spans();
+        assertMultisetsEqual(getOperations(spans), expectedAccesses);
     }
 
     private static Multiset<String> getOperations(List<SpanData> items)
