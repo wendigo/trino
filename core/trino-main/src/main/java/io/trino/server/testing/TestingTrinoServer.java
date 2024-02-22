@@ -276,7 +276,7 @@ public class TestingTrinoServer
 
         ImmutableList.Builder<Module> modules = ImmutableList.<Module>builder()
                 .add(new TestingNodeModule(environment))
-                .add(new TestingHttpServerModule(parseInt(coordinator ? coordinatorPort : "0")))
+                .add(new TestingHttpServerModule(parseInt(coordinator ? coordinatorPort : "0"), false))
                 .add(new JsonModule())
                 .add(new JaxrsModule())
                 .add(new MBeanModule())
