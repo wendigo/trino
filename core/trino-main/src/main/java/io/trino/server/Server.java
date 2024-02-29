@@ -105,7 +105,7 @@ public class Server
         modules.add(
                 new NodeModule(),
                 new DiscoveryModule(),
-                new HttpServerModule(),
+                new HttpServerModule(true),
                 new JsonModule(),
                 new JaxrsModule(),
                 new MBeanModule(),
