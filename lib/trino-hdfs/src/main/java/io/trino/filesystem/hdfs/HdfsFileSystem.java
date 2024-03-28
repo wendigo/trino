@@ -104,7 +104,7 @@ class HdfsFileSystem
         stats.getDeleteFileCalls().newCall();
         Path file = hadoopPath(location);
         FileSystem fileSystem = environment.getFileSystem(context, file);
-        environment.doAs(context.getIdentity(), () -> {
+        environment.callAs(context.getIdentity(), () -> {
             try (TimeStat.BlockTimer ignored = stats.getDeleteFileCalls().time()) {
                 if (hierarchical(fileSystem, location) && !fileSystem.getFileStatus(file).isFile()) {
                     throw new IOException("Location is not a file");
@@ -134,7 +134,7 @@ class HdfsFileSystem
                         mapping(HadoopPaths::hadoopPath, toList())));
         for (Entry<Path, List<Path>> directoryWithPaths : pathsGroupedByDirectory.entrySet()) {
             FileSystem rawFileSystem = getRawFileSystem(environment.getFileSystem(context, directoryWithPaths.getKey()));
-            environment.doAs(context.getIdentity(), () -> {
+            environment.callAs(context.getIdentity(), () -> {
                 if (rawFileSystem instanceof FileSystemWithBatchDelete fileSystemWithBatchDelete) {
                     fileSystemWithBatchDelete.deleteFiles(directoryWithPaths.getValue());
                 }
@@ -162,7 +162,7 @@ class HdfsFileSystem
         stats.getDeleteDirectoryCalls().newCall();
         Path directory = hadoopPath(location);
         FileSystem fileSystem = environment.getFileSystem(context, directory);
-        environment.doAs(context.getIdentity(), () -> {
+        environment.callAs(context.getIdentity(), () -> {
             try (TimeStat.BlockTimer ignored = stats.getDeleteDirectoryCalls().time()) {
                 // recursive delete on the root directory must be handled manually
                 if (location.path().isEmpty()) {
@@ -203,7 +203,7 @@ class HdfsFileSystem
         Path targetPath = hadoopPath(target);
         FileSystem fileSystem = environment.getFileSystem(context, sourcePath);
 
-        environment.doAs(context.getIdentity(), () -> {
+        environment.callAs(context.getIdentity(), () -> {
             try (TimeStat.BlockTimer ignored = stats.getRenameFileCalls().time()) {
                 if (!fileSystem.getFileStatus(sourcePath).isFile()) {
                     throw new IOException("Source location is not a file");
@@ -231,7 +231,7 @@ class HdfsFileSystem
         stats.getListFilesCalls().newCall();
         Path directory = hadoopPath(location);
         FileSystem fileSystem = environment.getFileSystem(context, directory);
-        return environment.doAs(context.getIdentity(), () -> {
+        return environment.callAs(context.getIdentity(), () -> {
             try (TimeStat.BlockTimer ignored = stats.getListFilesCalls().time()) {
                 return new HdfsFileIterator(location, directory, fileSystem.listFiles(directory, true));
             }
@@ -257,7 +257,7 @@ class HdfsFileSystem
             return Optional.of(true);
         }
 
-        return environment.doAs(context.getIdentity(), () -> {
+        return environment.callAs(context.getIdentity(), () -> {
             try (TimeStat.BlockTimer ignored = stats.getDirectoryExistsCalls().time()) {
                 if (!hierarchical(fileSystem, location)) {
                     try {
@@ -292,7 +292,7 @@ class HdfsFileSystem
         Path directory = hadoopPath(location);
         FileSystem fileSystem = environment.getFileSystem(context, directory);
 
-        environment.doAs(context.getIdentity(), () -> {
+        environment.callAs(context.getIdentity(), () -> {
             if (!hierarchical(fileSystem, location)) {
                 return null;
             }
@@ -323,7 +323,7 @@ class HdfsFileSystem
         Path targetPath = hadoopPath(target);
         FileSystem fileSystem = environment.getFileSystem(context, sourcePath);
 
-        environment.doAs(context.getIdentity(), () -> {
+        environment.callAs(context.getIdentity(), () -> {
             try (TimeStat.BlockTimer ignored = stats.getRenameDirectoryCalls().time()) {
                 if (!hierarchical(fileSystem, source)) {
                     throw new IOException("Non-hierarchical file system '%s' does not support directory renames".formatted(fileSystem.getScheme()));
@@ -353,7 +353,7 @@ class HdfsFileSystem
         stats.getListDirectoriesCalls().newCall();
         Path directory = hadoopPath(location);
         FileSystem fileSystem = environment.getFileSystem(context, directory);
-        return environment.doAs(context.getIdentity(), () -> {
+        return environment.callAs(context.getIdentity(), () -> {
             try (TimeStat.BlockTimer ignored = stats.getListDirectoriesCalls().time()) {
                 FileStatus[] files = fileSystem.listStatus(directory);
                 if (files.length == 0) {
@@ -387,7 +387,7 @@ class HdfsFileSystem
         Path targetPath = hadoopPath(targetLocation);
         FileSystem fileSystem = environment.getFileSystem(context, targetPath);
 
-        return environment.doAs(context.getIdentity(), () -> {
+        return environment.callAs(context.getIdentity(), () -> {
             try (TimeStat.BlockTimer ignored = stats.getCreateTemporaryDirectoryCalls().time()) {
                 FileSystem rawFileSystem = getRawFileSystem(fileSystem);
 

@@ -15,16 +15,16 @@ package io.trino.hdfs.authentication;
 
 import org.apache.hadoop.security.UserGroupInformation;
 
-import java.security.PrivilegedAction;
+import java.util.concurrent.Callable;
 
 public final class UserGroupInformationUtils
 {
     private UserGroupInformationUtils() {}
 
-    public static <R, E extends Exception> R executeActionInDoAs(UserGroupInformation userGroupInformation, GenericExceptionAction<R, E> action)
+    public static <R, E extends Exception> R executeActionInCallAs(UserGroupInformation userGroupInformation, GenericExceptionAction<R, E> action)
             throws E
     {
-        return userGroupInformation.doAs((PrivilegedAction<ResultOrException<R, E>>) () -> {
+        return userGroupInformation.callAs((Callable<ResultOrException<R, E>>) () -> {
             try {
                 return new ResultOrException<>(action.run(), null);
             }

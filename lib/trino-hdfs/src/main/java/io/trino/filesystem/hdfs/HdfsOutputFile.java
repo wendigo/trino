@@ -112,7 +112,7 @@ class HdfsOutputFile
     private OutputStream create(GenericExceptionAction<FSDataOutputStream, IOException> action)
             throws IOException
     {
-        FSDataOutputStream out = environment.doAs(context.getIdentity(), action);
+        FSDataOutputStream out = environment.callAs(context.getIdentity(), action);
         return new HdfsOutputStream(location, out, environment, context);
     }
 

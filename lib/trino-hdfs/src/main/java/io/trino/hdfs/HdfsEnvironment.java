@@ -106,7 +106,7 @@ public class HdfsEnvironment
             throws IOException
     {
         try (var ignored = new ThreadContextClassLoader(getClass().getClassLoader())) {
-            return hdfsAuthentication.doAs(identity, () -> {
+            return hdfsAuthentication.callAs(identity, () -> {
                 FileSystem fileSystem = path.getFileSystem(configuration);
                 fileSystem.setVerifyChecksum(verifyChecksum);
                 if (getRawFileSystem(fileSystem) instanceof OpenTelemetryAwareFileSystem fs) {
@@ -127,11 +127,11 @@ public class HdfsEnvironment
         return newFileInheritOwnership;
     }
 
-    public <R, E extends Exception> R doAs(ConnectorIdentity identity, GenericExceptionAction<R, E> action)
+    public <R, E extends Exception> R callAs(ConnectorIdentity identity, GenericExceptionAction<R, E> action)
             throws E
     {
         try (var ignored = new ThreadContextClassLoader(getClass().getClassLoader())) {
-            return hdfsAuthentication.doAs(identity, action);
+            return hdfsAuthentication.callAs(identity, action);
         }
     }
 

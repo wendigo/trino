@@ -16,7 +16,7 @@ package io.trino.hdfs.authentication;
 import com.google.inject.Inject;
 import io.trino.spi.security.ConnectorIdentity;
 
-import static io.trino.hdfs.authentication.UserGroupInformationUtils.executeActionInDoAs;
+import static io.trino.hdfs.authentication.UserGroupInformationUtils.executeActionInCallAs;
 import static java.util.Objects.requireNonNull;
 
 public class DirectHdfsAuthentication
@@ -31,9 +31,9 @@ public class DirectHdfsAuthentication
     }
 
     @Override
-    public <R, E extends Exception> R doAs(ConnectorIdentity identity, GenericExceptionAction<R, E> action)
+    public <R, E extends Exception> R callAs(ConnectorIdentity identity, GenericExceptionAction<R, E> action)
             throws E
     {
-        return executeActionInDoAs(hadoopAuthentication.getUserGroupInformation(), action);
+        return executeActionInCallAs(hadoopAuthentication.getUserGroupInformation(), action);
     }
 }

@@ -53,7 +53,7 @@ class HdfsOutputStream
     {
         ensureOpen();
         // handle Kerberos ticket refresh during long write operations
-        environment.doAs(identity, () -> {
+        environment.callAs(identity, () -> {
             super.write(b);
             return null;
         });
@@ -65,7 +65,7 @@ class HdfsOutputStream
     {
         ensureOpen();
         // handle Kerberos ticket refresh during long write operations
-        environment.doAs(identity, () -> {
+        environment.callAs(identity, () -> {
             super.write(b, off, len);
             return null;
         });

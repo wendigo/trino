@@ -18,7 +18,7 @@ import io.trino.plugin.base.security.UserNameProvider;
 import io.trino.spi.security.ConnectorIdentity;
 import org.apache.hadoop.security.UserGroupInformation;
 
-import static io.trino.hdfs.authentication.UserGroupInformationUtils.executeActionInDoAs;
+import static io.trino.hdfs.authentication.UserGroupInformationUtils.executeActionInCallAs;
 import static java.util.Objects.requireNonNull;
 
 public class ImpersonatingHdfsAuthentication
@@ -35,10 +35,10 @@ public class ImpersonatingHdfsAuthentication
     }
 
     @Override
-    public <R, E extends Exception> R doAs(ConnectorIdentity identity, GenericExceptionAction<R, E> action)
+    public <R, E extends Exception> R callAs(ConnectorIdentity identity, GenericExceptionAction<R, E> action)
             throws E
     {
-        return executeActionInDoAs(createProxyUser(userNameProvider.get(identity)), action);
+        return executeActionInCallAs(createProxyUser(userNameProvider.get(identity)), action);
     }
 
     private UserGroupInformation createProxyUser(String user)

@@ -94,7 +94,7 @@ class HdfsInputFile
             throws IOException
     {
         FileSystem fileSystem = environment.getFileSystem(context, file);
-        return environment.doAs(context.getIdentity(), () -> fileSystem.exists(file));
+        return environment.callAs(context.getIdentity(), () -> fileSystem.exists(file));
     }
 
     @Override
@@ -114,7 +114,7 @@ class HdfsInputFile
     {
         openFileCallStat.newCall();
         FileSystem fileSystem = environment.getFileSystem(context, file);
-        return environment.doAs(context.getIdentity(), () -> {
+        return environment.callAs(context.getIdentity(), () -> {
             try (TimeStat.BlockTimer ignored = openFileCallStat.time()) {
                 return fileSystem.open(file);
             }
@@ -134,7 +134,7 @@ class HdfsInputFile
         if (status == null) {
             FileSystem fileSystem = environment.getFileSystem(context, file);
             try {
-                status = environment.doAs(context.getIdentity(), () -> fileSystem.getFileStatus(file));
+                status = environment.callAs(context.getIdentity(), () -> fileSystem.getFileStatus(file));
             }
             catch (FileNotFoundException e) {
                 throw withCause(new FileNotFoundException(toString()), e);

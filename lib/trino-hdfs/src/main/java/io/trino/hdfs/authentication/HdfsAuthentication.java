@@ -17,6 +17,6 @@ import io.trino.spi.security.ConnectorIdentity;
 
 public interface HdfsAuthentication
 {
-    <R, E extends Exception> R doAs(ConnectorIdentity identity, GenericExceptionAction<R, E> action)
+    <R, E extends Exception> R callAs(ConnectorIdentity identity, GenericExceptionAction<R, E> action)
             throws E;
 }
