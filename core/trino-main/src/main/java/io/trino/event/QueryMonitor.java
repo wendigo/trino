@@ -709,16 +709,16 @@ public class QueryMonitor
         return new StageCpuDistribution(
                 stageInfo.getStageId().getId(),
                 stageInfo.getTasks().size(),
-                (long) snapshot.getP25(),
-                (long) snapshot.getP50(),
-                (long) snapshot.getP75(),
-                (long) snapshot.getP90(),
-                (long) snapshot.getP95(),
-                (long) snapshot.getP99(),
-                (long) snapshot.getMin(),
-                (long) snapshot.getMax(),
-                (long) snapshot.getTotal(),
-                firstNonNaN(snapshot.getTotal() / snapshot.getCount(), 0.0));
+                (long) snapshot.p25(),
+                (long) snapshot.p50(),
+                (long) snapshot.p75(),
+                (long) snapshot.p90(),
+                (long) snapshot.p95(),
+                (long) snapshot.p99(),
+                (long) snapshot.min(),
+                (long) snapshot.max(),
+                (long) snapshot.total(),
+                firstNonNaN(snapshot.total() / snapshot.count(), 0.0));
     }
 
     private static List<StageOutputBufferUtilization> getStageOutputBufferUtilizations(QueryInfo queryInfo)

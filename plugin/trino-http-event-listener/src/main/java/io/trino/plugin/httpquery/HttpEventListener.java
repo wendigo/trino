@@ -158,14 +158,14 @@ public class HttpEventListener
 
                                         log.warn("QueryId = \"%s\", attempt = %d/%d, URL = %s | Ingest server responded with code %d, will retry after approximately %d seconds",
                                                 queryId, attempt + 1, retryCount + 1, request.getUri().toString(),
-                                                result.getStatusCode(), nextDelay.roundTo(TimeUnit.SECONDS));
+                                                result.statusCode(), nextDelay.roundTo(TimeUnit.SECONDS));
 
                                         attemptToSend(request, nextAttempt, nextDelay, queryId);
                                     }
                                     else {
                                         log.error("QueryId = \"%s\", attempt = %d/%d, URL = %s | Ingest server responded with code %d, fatal error",
                                                 queryId, attempt + 1, retryCount + 1, request.getUri().toString(),
-                                                result.getStatusCode());
+                                                result.statusCode());
                                     }
                                 }
                                 else {
@@ -198,7 +198,7 @@ public class HttpEventListener
 
     private boolean shouldRetry(StatusResponse response)
     {
-        int statusCode = response.getStatusCode();
+        int statusCode = response.statusCode();
 
         // 1XX Information, requests can't be split
         if (statusCode < 200) {

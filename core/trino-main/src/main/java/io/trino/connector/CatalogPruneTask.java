@@ -134,7 +134,7 @@ public class CatalogPruneTask
     public void pruneWorkerCatalogs()
     {
         Set<ServiceDescriptor> online = selector.selectAllServices().stream()
-                .filter(descriptor -> !nodeInfo.getNodeId().equals(descriptor.getNodeId()))
+                .filter(descriptor -> !nodeInfo.getNodeId().equals(descriptor.nodeId()))
                 .collect(toImmutableSet());
 
         // send message to workers to trigger prune
@@ -189,7 +189,7 @@ public class CatalogPruneTask
 
     private URI getHttpUri(ServiceDescriptor descriptor)
     {
-        String url = descriptor.getProperties().get(httpsRequired ? "https" : "http");
+        String url = descriptor.properties().get(httpsRequired ? "https" : "http");
         if (url != null) {
             return URI.create(url);
         }

@@ -45,11 +45,11 @@ public class UriBasedS3SecurityMappingsProvider
     {
         Request request = prepareGet().setUri(configUri).build();
         StringResponse response = httpClient.execute(request, createStringResponseHandler());
-        int status = response.getStatusCode();
+        int status = response.statusCode();
         if (status != HttpStatus.OK.code()) {
             throw new IllegalStateException(format("Request to '%s' returned unexpected status code: '%d'", configUri, status));
         }
-        return response.getBody();
+        return response.body();
     }
 
     @Override

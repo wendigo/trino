@@ -128,7 +128,7 @@ public final class DiscoveryNodeManager
             URI uri = getHttpUri(service, httpsRequired);
             NodeVersion nodeVersion = getNodeVersion(service);
             if (uri != null && nodeVersion != null) {
-                InternalNode node = new InternalNode(service.getNodeId(), uri, nodeVersion, isCoordinator(service));
+                InternalNode node = new InternalNode(service.nodeId(), uri, nodeVersion, isCoordinator(service));
 
                 if (node.getNodeIdentifier().equals(currentNodeId)) {
                     checkState(
@@ -225,7 +225,7 @@ public final class DiscoveryNodeManager
             NodeVersion nodeVersion = getNodeVersion(service);
             boolean coordinator = isCoordinator(service);
             if (uri != null && nodeVersion != null) {
-                InternalNode node = new InternalNode(service.getNodeId(), uri, nodeVersion, coordinator);
+                InternalNode node = new InternalNode(service.nodeId(), uri, nodeVersion, coordinator);
                 NodeState nodeState = getNodeState(node);
 
                 switch (nodeState) {
@@ -236,7 +236,7 @@ public final class DiscoveryNodeManager
                         }
 
                         // record available active nodes organized by catalog handle
-                        String catalogHandleIds = service.getProperties().get("catalogHandleIds");
+                        String catalogHandleIds = service.properties().get("catalogHandleIds");
                         if (catalogHandleIds != null) {
                             catalogHandleIds = catalogHandleIds.toLowerCase(ENGLISH);
                             for (String catalogHandleId : CATALOG_HANDLE_ID_SPLITTER.split(catalogHandleIds)) {
@@ -385,7 +385,7 @@ public final class DiscoveryNodeManager
 
     private static URI getHttpUri(ServiceDescriptor descriptor, boolean httpsRequired)
     {
-        String url = descriptor.getProperties().get(httpsRequired ? "https" : "http");
+        String url = descriptor.properties().get(httpsRequired ? "https" : "http");
         if (url != null) {
             return URI.create(url);
         }
@@ -394,12 +394,12 @@ public final class DiscoveryNodeManager
 
     private static NodeVersion getNodeVersion(ServiceDescriptor descriptor)
     {
-        String nodeVersion = descriptor.getProperties().get("node_version");
+        String nodeVersion = descriptor.properties().get("node_version");
         return nodeVersion == null ? null : new NodeVersion(nodeVersion);
     }
 
     private static boolean isCoordinator(ServiceDescriptor service)
     {
-        return Boolean.parseBoolean(service.getProperties().get("coordinator"));
+        return Boolean.parseBoolean(service.properties().get("coordinator"));
     }
 }

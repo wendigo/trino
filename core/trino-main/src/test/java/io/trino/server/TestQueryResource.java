@@ -348,7 +348,7 @@ public class TestQueryResource
                 .setUri(uri)
                 .setHeader(TRINO_HEADERS.requestUser(), "unknown")
                 .build();
-        return client.execute(request, createStatusResponseHandler()).getStatusCode();
+        return client.execute(request, createStatusResponseHandler()).statusCode();
     }
 
     private int killQueryInfo(String queryId, String kind)
@@ -362,6 +362,6 @@ public class TestQueryResource
                 .setUri(uri)
                 .setHeader(TRINO_HEADERS.requestUser(), "unknown")
                 .build();
-        return client.execute(request, createStatusResponseHandler()).getStatusCode();
+        return client.execute(request, createStatusResponseHandler()).statusCode();
     }
 }

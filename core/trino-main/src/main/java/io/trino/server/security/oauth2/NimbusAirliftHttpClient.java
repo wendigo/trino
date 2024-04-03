@@ -62,7 +62,7 @@ public class NimbusAirliftHttpClient
             StringResponseHandler.StringResponse response = httpClient.execute(
                     prepareGet().setUri(url.toURI()).build(),
                     createStringResponseHandler());
-            return new Resource(response.getBody(), response.getHeader(CONTENT_TYPE));
+            return new Resource(response.body(), response.getHeader(CONTENT_TYPE));
         }
         catch (URISyntaxException e) {
             throw new RuntimeException(e);
@@ -124,12 +124,12 @@ public class NimbusAirliftHttpClient
             StringResponseHandler.StringResponse stringResponse = handler.handle(request, response);
             HTTPResponse nimbusResponse = new HTTPResponse(response.getStatusCode());
             response.getHeaders().asMap().forEach((name, values) -> nimbusResponse.setHeader(name.toString(), values.toArray(new String[0])));
-            nimbusResponse.setBody(stringResponse.getBody());
+            nimbusResponse.setBody(stringResponse.body());
             try {
                 return parser.parse(nimbusResponse);
             }
             catch (ParseException e) {
-                throw new RuntimeException(format("Unable to parse response status=[%d], body=[%s]", stringResponse.getStatusCode(), stringResponse.getBody()), e);
+                throw new RuntimeException(format("Unable to parse response status=[%d], body=[%s]", stringResponse.statusCode(), stringResponse.body()), e);
             }
         }
     }

@@ -137,9 +137,9 @@ public class SalesforceBasicAuthenticator
 
         StringResponseHandler.StringResponse response = httpClient.execute(request, StringResponseHandler.createStringResponseHandler());
 
-        if (response.getStatusCode() != 200) {
+        if (response.statusCode() != 200) {
             throw new AccessDeniedException(format("Invalid response for login\n.%s",
-                    response.getBody()));
+                    response.body()));
         }
 
         Document xmlResponse;
@@ -147,11 +147,11 @@ public class SalesforceBasicAuthenticator
             DocumentBuilderFactory factory = DocumentBuilderFactory.newInstance();
             DocumentBuilder builder = factory.newDocumentBuilder();
             xmlResponse = builder.parse(new InputSource(new StringReader(
-                    response.getBody())));
+                    response.body())));
         }
         catch (ParserConfigurationException | SAXException | IOException e) {
             throw new RuntimeException(format("Error parsing response: %s\n\tReceived error message: %s",
-                    response.getBody(),
+                    response.body(),
                     e.getMessage()));
         }
 

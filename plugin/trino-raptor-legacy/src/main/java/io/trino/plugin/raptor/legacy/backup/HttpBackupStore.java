@@ -169,23 +169,23 @@ public class HttpBackupStore
 
     private static boolean isOk(StatusResponse response)
     {
-        return (response.getStatusCode() == HttpStatus.OK.code()) ||
-                (response.getStatusCode() == HttpStatus.NO_CONTENT.code());
+        return (response.statusCode() == HttpStatus.OK.code()) ||
+                (response.statusCode() == HttpStatus.NO_CONTENT.code());
     }
 
     private static boolean isNotFound(StatusResponse response)
     {
-        return response.getStatusCode() == HttpStatus.NOT_FOUND.code();
+        return response.statusCode() == HttpStatus.NOT_FOUND.code();
     }
 
     private static boolean isGone(StatusResponse response)
     {
-        return response.getStatusCode() == HttpStatus.GONE.code();
+        return response.statusCode() == HttpStatus.GONE.code();
     }
 
     private static RuntimeException badResponse(StatusResponse response)
     {
-        throw new RuntimeException("Request failed with HTTP status " + response.getStatusCode());
+        throw new RuntimeException("Request failed with HTTP status " + response.statusCode());
     }
 
     private static long xxHash64(File file)

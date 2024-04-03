@@ -218,11 +218,11 @@ public class HeartbeatFailureDetector
     void updateMonitoredServices()
     {
         Set<ServiceDescriptor> online = selector.selectAllServices().stream()
-                .filter(descriptor -> !nodeInfo.getNodeId().equals(descriptor.getNodeId()))
+                .filter(descriptor -> !nodeInfo.getNodeId().equals(descriptor.nodeId()))
                 .collect(toImmutableSet());
 
         Set<UUID> onlineIds = online.stream()
-                .map(ServiceDescriptor::getId)
+                .map(ServiceDescriptor::id)
                 .collect(toImmutableSet());
 
         // make sure only one thread is updating the registrations
@@ -231,39 +231,39 @@ public class HeartbeatFailureDetector
             List<UUID> expiredIds = tasks.values().stream()
                     .filter(MonitoringTask::isExpired)
                     .map(MonitoringTask::getService)
-                    .map(ServiceDescriptor::getId)
+                    .map(ServiceDescriptor::id)
                     .collect(toImmutableList());
 
-            tasks.keySet().removeAll(expiredIds);
+            expiredIds.forEach(tasks.keySet()::remove);
 
             // 2. disable offline services
             tasks.values().stream()
-                    .filter(task -> !onlineIds.contains(task.getService().getId()))
+                    .filter(task -> !onlineIds.contains(task.getService().id()))
                     .forEach(MonitoringTask::disable);
 
             // 3. create tasks for new services
             Set<ServiceDescriptor> newServices = online.stream()
-                    .filter(service -> !tasks.keySet().contains(service.getId()))
+                    .filter(service -> !tasks.containsKey(service.id()))
                     .collect(toImmutableSet());
 
             for (ServiceDescriptor service : newServices) {
                 URI uri = getHttpUri(service);
 
                 if (uri != null) {
-                    tasks.put(service.getId(), new MonitoringTask(service, uriBuilderFrom(uri).appendPath("/v1/status").build()));
+                    tasks.put(service.id(), new MonitoringTask(service, uriBuilderFrom(uri).appendPath("/v1/status").build()));
                 }
             }
 
             // 4. enable all online tasks (existing plus newly created)
             tasks.values().stream()
-                    .filter(task -> onlineIds.contains(task.getService().getId()))
+                    .filter(task -> onlineIds.contains(task.getService().id()))
                     .forEach(MonitoringTask::enable);
         }
     }
 
     private URI getHttpUri(ServiceDescriptor descriptor)
     {
-        String url = descriptor.getProperties().get(httpsRequired ? "https" : "http");
+        String url = descriptor.properties().get(httpsRequired ? "https" : "http");
         if (url != null) {
             return URI.create(url);
         }
@@ -313,7 +313,7 @@ public class HeartbeatFailureDetector
                     }
                     catch (Throwable e) {
                         // ignore to avoid getting unscheduled
-                        log.warn(e, "Error pinging service %s (%s)", service.getId(), uri);
+                        log.warn(e, "Error pinging service %s (%s)", service.id(), uri);
                     }
                 }, heartbeat.toMillis(), heartbeat.toMillis(), TimeUnit.MILLISECONDS);
                 disabledTimestamp = null;

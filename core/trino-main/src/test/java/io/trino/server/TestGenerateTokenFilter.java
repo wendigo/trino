@@ -89,8 +89,8 @@ public class TestGenerateTokenFilter
     {
         Request request = prepareGet().setUri(server.getBaseUrl().resolve("/testing/echo_token")).build();
         StringResponse response = httpClient.execute(request, createStringResponseHandler());
-        assertThat(response.getStatusCode()).isEqualTo(SC_OK);
-        assertThat(response.getBody()).isEqualTo(filter.getLastToken());
+        assertThat(response.statusCode()).isEqualTo(SC_OK);
+        assertThat(response.body()).isEqualTo(filter.getLastToken());
     }
 
     @Retention(RUNTIME)

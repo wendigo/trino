@@ -179,7 +179,7 @@ public class TestServer
                 prepareGet().setUri(server.resolve("/v1/info")).build(),
                 createStatusResponseHandler());
 
-        assertThat(response.getStatusCode()).isEqualTo(OK.getStatusCode());
+        assertThat(response.statusCode()).isEqualTo(OK.getStatusCode());
     }
 
     @Test
@@ -354,7 +354,7 @@ public class TestServer
                 .setFollowRedirects(false)
                 .build();
         StatusResponse response = client.execute(request, createStatusResponseHandler());
-        assertThat(response.getStatusCode())
+        assertThat(response.statusCode())
                 .describedAs("Status code")
                 .isEqualTo(OK.getStatusCode());
         assertThat(response.getHeader(CONTENT_TYPE))
@@ -370,7 +370,7 @@ public class TestServer
                 .setFollowRedirects(false)
                 .build();
         StatusResponse response = client.execute(request, createStatusResponseHandler());
-        assertThat(response.getStatusCode())
+        assertThat(response.statusCode())
                 .describedAs("Status code")
                 .isEqualTo(SEE_OTHER.getStatusCode());
         assertThat(response.getHeader("Location"))
@@ -386,7 +386,7 @@ public class TestServer
                 .setFollowRedirects(false)
                 .build();
         response = client.execute(request, createStatusResponseHandler());
-        assertThat(response.getStatusCode())
+        assertThat(response.statusCode())
                 .describedAs("Status code")
                 .isEqualTo(SEE_OTHER.getStatusCode());
         assertThat(response.getHeader("Location"))

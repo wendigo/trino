@@ -528,11 +528,11 @@ public final class HttpPageBufferClient
             {
                 assertNotHoldsLock(HttpPageBufferClient.this);
 
-                if (result.getStatusCode() != NO_CONTENT.code()) {
+                if (result.statusCode() != NO_CONTENT.code()) {
                     onFailure(new TrinoTransportException(
                             REMOTE_BUFFER_CLOSE_FAILED,
                             fromUri(location),
-                            format("Error closing remote buffer, expected %s got %s", NO_CONTENT.code(), result.getStatusCode())));
+                            format("Error closing remote buffer, expected %s got %s", NO_CONTENT.code(), result.statusCode())));
                     return;
                 }
 
