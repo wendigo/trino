@@ -108,10 +108,15 @@ public sealed interface Block
      */
     void retainedBytesForEachPart(ObjLongConsumer<Object> consumer);
 
+    BlockEncodingId encodingId();
+
     /**
      * Get the encoding for this block.
      */
-    String getEncodingName();
+    default String getEncodingName()
+    {
+        return encodingId().name();
+    }
 
     /**
      * Create a new block from the current block by keeping the same elements only with respect

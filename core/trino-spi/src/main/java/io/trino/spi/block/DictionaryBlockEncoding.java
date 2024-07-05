@@ -18,15 +18,15 @@ import io.airlift.slice.SliceOutput;
 
 import java.util.Optional;
 
+import static io.trino.spi.block.BlockEncodingId.DICTIONARY;
+
 public class DictionaryBlockEncoding
         implements BlockEncoding
 {
-    public static final String NAME = "DICTIONARY";
-
     @Override
-    public String getName()
+    public BlockEncodingId id()
     {
-        return NAME;
+        return DICTIONARY;
     }
 
     @Override

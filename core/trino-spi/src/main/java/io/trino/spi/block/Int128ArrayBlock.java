@@ -22,6 +22,7 @@ import java.util.function.ObjLongConsumer;
 
 import static io.airlift.slice.SizeOf.instanceSize;
 import static io.airlift.slice.SizeOf.sizeOf;
+import static io.trino.spi.block.BlockEncodingId.INT128;
 import static io.trino.spi.block.BlockUtil.checkArrayRange;
 import static io.trino.spi.block.BlockUtil.checkReadablePosition;
 import static io.trino.spi.block.BlockUtil.checkValidRegion;
@@ -216,9 +217,9 @@ public final class Int128ArrayBlock
     }
 
     @Override
-    public String getEncodingName()
+    public BlockEncodingId encodingId()
     {
-        return Int128ArrayBlockEncoding.NAME;
+        return INT128;
     }
 
     @Override

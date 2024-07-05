@@ -17,18 +17,17 @@ import io.airlift.slice.SliceInput;
 import io.airlift.slice.SliceOutput;
 
 import static io.trino.spi.block.ArrayBlock.createArrayBlockInternal;
+import static io.trino.spi.block.BlockEncodingId.ARRAY;
 import static io.trino.spi.block.EncoderUtil.decodeNullBits;
 import static io.trino.spi.block.EncoderUtil.encodeNullsAsBits;
 
 public class ArrayBlockEncoding
         implements BlockEncoding
 {
-    public static final String NAME = "ARRAY";
-
     @Override
-    public String getName()
+    public BlockEncodingId id()
     {
-        return NAME;
+        return ARRAY;
     }
 
     @Override

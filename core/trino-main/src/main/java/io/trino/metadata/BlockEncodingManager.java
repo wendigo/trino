@@ -15,6 +15,7 @@ package io.trino.metadata;
 
 import io.trino.spi.block.ArrayBlockEncoding;
 import io.trino.spi.block.BlockEncoding;
+import io.trino.spi.block.BlockEncodingId;
 import io.trino.spi.block.ByteArrayBlockEncoding;
 import io.trino.spi.block.DictionaryBlockEncoding;
 import io.trino.spi.block.Fixed12BlockEncoding;
@@ -36,7 +37,7 @@ import static java.util.Objects.requireNonNull;
 
 public final class BlockEncodingManager
 {
-    private final Map<String, BlockEncoding> blockEncodings = new ConcurrentHashMap<>();
+    private final Map<BlockEncodingId, BlockEncoding> blockEncodings = new ConcurrentHashMap<>();
 
     public BlockEncodingManager()
     {
@@ -56,17 +57,17 @@ public final class BlockEncodingManager
         addBlockEncoding(new LazyBlockEncoding());
     }
 
-    public BlockEncoding getBlockEncoding(String encodingName)
+    public BlockEncoding getBlockEncoding(BlockEncodingId id)
     {
-        BlockEncoding blockEncoding = blockEncodings.get(encodingName);
-        checkArgument(blockEncoding != null, "Unknown block encoding: %s", encodingName);
+        BlockEncoding blockEncoding = blockEncodings.get(id);
+        checkArgument(blockEncoding != null, "Unknown block encoding: %s", id);
         return blockEncoding;
     }
 
     public void addBlockEncoding(BlockEncoding blockEncoding)
     {
         requireNonNull(blockEncoding, "blockEncoding is null");
-        BlockEncoding existingEntry = blockEncodings.putIfAbsent(blockEncoding.getName(), blockEncoding);
+        BlockEncoding existingEntry = blockEncodings.putIfAbsent(blockEncoding.id(), blockEncoding);
         checkArgument(existingEntry == null, "Encoding already registered: %s", blockEncoding.getName());
     }
 }

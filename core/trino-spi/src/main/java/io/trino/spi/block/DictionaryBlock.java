@@ -21,6 +21,7 @@ import java.util.function.ObjLongConsumer;
 
 import static io.airlift.slice.SizeOf.instanceSize;
 import static io.airlift.slice.SizeOf.sizeOf;
+import static io.trino.spi.block.BlockEncodingId.DICTIONARY;
 import static io.trino.spi.block.BlockUtil.checkArrayRange;
 import static io.trino.spi.block.BlockUtil.checkValidPosition;
 import static io.trino.spi.block.BlockUtil.checkValidPositions;
@@ -310,9 +311,9 @@ public final class DictionaryBlock
     }
 
     @Override
-    public String getEncodingName()
+    public BlockEncodingId encodingId()
     {
-        return DictionaryBlockEncoding.NAME;
+        return DICTIONARY;
     }
 
     @Override

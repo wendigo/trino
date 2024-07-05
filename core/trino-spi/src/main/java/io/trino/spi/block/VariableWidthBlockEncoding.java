@@ -20,6 +20,7 @@ import io.airlift.slice.Slices;
 
 import java.util.Arrays;
 
+import static io.trino.spi.block.BlockEncodingId.VARIABLE_WIDTH;
 import static io.trino.spi.block.EncoderUtil.decodeNullBits;
 import static io.trino.spi.block.EncoderUtil.encodeNullsAsBits;
 import static java.lang.String.format;
@@ -27,12 +28,10 @@ import static java.lang.String.format;
 public class VariableWidthBlockEncoding
         implements BlockEncoding
 {
-    public static final String NAME = "VARIABLE_WIDTH";
-
     @Override
-    public String getName()
+    public BlockEncodingId id()
     {
-        return NAME;
+        return VARIABLE_WIDTH;
     }
 
     @Override

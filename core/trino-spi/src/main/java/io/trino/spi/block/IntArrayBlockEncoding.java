@@ -16,6 +16,7 @@ package io.trino.spi.block;
 import io.airlift.slice.SliceInput;
 import io.airlift.slice.SliceOutput;
 
+import static io.trino.spi.block.BlockEncodingId.INT_ARRAY;
 import static io.trino.spi.block.EncoderUtil.decodeNullBits;
 import static io.trino.spi.block.EncoderUtil.encodeNullsAsBits;
 import static io.trino.spi.block.EncoderUtil.retrieveNullBits;
@@ -24,12 +25,10 @@ import static java.lang.System.arraycopy;
 public class IntArrayBlockEncoding
         implements BlockEncoding
 {
-    public static final String NAME = "INT_ARRAY";
-
     @Override
-    public String getName()
+    public BlockEncodingId id()
     {
-        return NAME;
+        return INT_ARRAY;
     }
 
     @Override

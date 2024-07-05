@@ -21,6 +21,7 @@ import java.util.function.ObjLongConsumer;
 
 import static io.airlift.slice.SizeOf.instanceSize;
 import static io.airlift.slice.SizeOf.sizeOf;
+import static io.trino.spi.block.BlockEncodingId.FIXED_12;
 import static io.trino.spi.block.BlockUtil.checkArrayRange;
 import static io.trino.spi.block.BlockUtil.checkReadablePosition;
 import static io.trino.spi.block.BlockUtil.checkValidRegion;
@@ -224,9 +225,9 @@ public final class Fixed12Block
     }
 
     @Override
-    public String getEncodingName()
+    public BlockEncodingId encodingId()
     {
-        return Fixed12BlockEncoding.NAME;
+        return FIXED_12;
     }
 
     @Override

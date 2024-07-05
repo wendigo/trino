@@ -21,6 +21,7 @@ import java.util.function.ObjLongConsumer;
 
 import static io.airlift.slice.SizeOf.instanceSize;
 import static io.airlift.slice.SizeOf.sizeOf;
+import static io.trino.spi.block.BlockEncodingId.ARRAY;
 import static io.trino.spi.block.BlockUtil.checkArrayRange;
 import static io.trino.spi.block.BlockUtil.checkReadablePosition;
 import static io.trino.spi.block.BlockUtil.checkValidPositions;
@@ -186,9 +187,9 @@ public final class ArrayBlock
     }
 
     @Override
-    public String getEncodingName()
+    public BlockEncodingId encodingId()
     {
-        return ArrayBlockEncoding.NAME;
+        return ARRAY;
     }
 
     @Override

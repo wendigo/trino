@@ -23,6 +23,7 @@ import java.util.function.ObjLongConsumer;
 
 import static io.airlift.slice.SizeOf.instanceSize;
 import static io.airlift.slice.SizeOf.sizeOf;
+import static io.trino.spi.block.BlockEncodingId.BYTE;
 import static io.trino.spi.block.BlockUtil.checkArrayRange;
 import static io.trino.spi.block.BlockUtil.checkReadablePosition;
 import static io.trino.spi.block.BlockUtil.checkValidRegion;
@@ -216,9 +217,9 @@ public final class ByteArrayBlock
     }
 
     @Override
-    public String getEncodingName()
+    public BlockEncodingId encodingId()
     {
-        return ByteArrayBlockEncoding.NAME;
+        return BYTE;
     }
 
     @Override

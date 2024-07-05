@@ -16,15 +16,15 @@ package io.trino.spi.block;
 import io.airlift.slice.SliceInput;
 import io.airlift.slice.SliceOutput;
 
+import static io.trino.spi.block.BlockEncodingId.RLE;
+
 public class RunLengthBlockEncoding
         implements BlockEncoding
 {
-    public static final String NAME = "RLE";
-
     @Override
-    public String getName()
+    public BlockEncodingId id()
     {
-        return NAME;
+        return RLE;
     }
 
     @Override

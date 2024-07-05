@@ -23,7 +23,15 @@ public interface BlockEncoding
     /**
      * Gets the unique name of this encoding.
      */
-    String getName();
+    default String getName()
+    {
+        return id().name();
+    }
+
+    /**
+     * Unique id of the block encoding
+     */
+    BlockEncodingId id();
 
     /**
      * Read a block from the specified input.  The returned

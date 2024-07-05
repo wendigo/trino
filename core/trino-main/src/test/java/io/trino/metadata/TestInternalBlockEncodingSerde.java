@@ -19,6 +19,7 @@ import io.airlift.slice.Slices;
 import io.trino.spi.block.Block;
 import io.trino.spi.block.BlockBuilder;
 import io.trino.spi.block.BlockEncoding;
+import io.trino.spi.block.BlockEncodingId;
 import io.trino.spi.block.BlockEncodingSerde;
 import io.trino.spi.block.VariableWidthBlockEncoding;
 import io.trino.spi.type.TestingTypeManager;
@@ -27,6 +28,7 @@ import org.junit.jupiter.api.Test;
 
 import java.util.Map;
 
+import static io.trino.spi.block.BlockEncodingId.VARIABLE_WIDTH;
 import static io.trino.spi.type.BooleanType.BOOLEAN;
 import static io.trino.spi.type.VarcharType.VARCHAR;
 import static org.assertj.core.api.Assertions.assertThat;
@@ -34,7 +36,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 public class TestInternalBlockEncodingSerde
 {
     private final TestingTypeManager testingTypeManager = new TestingTypeManager();
-    private final Map<String, BlockEncoding> blockEncodings = ImmutableMap.of(VariableWidthBlockEncoding.NAME, new VariableWidthBlockEncoding());
+    private final Map<BlockEncodingId, BlockEncoding> blockEncodings = ImmutableMap.of(VARIABLE_WIDTH, new VariableWidthBlockEncoding());
     private final BlockEncodingSerde blockEncodingSerde = new InternalBlockEncodingSerde(blockEncodings::get, testingTypeManager::getType);
 
     @Test

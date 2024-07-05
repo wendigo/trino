@@ -18,15 +18,15 @@ import io.airlift.slice.SliceOutput;
 
 import java.util.Optional;
 
+import static io.trino.spi.block.BlockEncodingId.LAZY;
+
 public class LazyBlockEncoding
         implements BlockEncoding
 {
-    public static final String NAME = "LAZY";
-
     @Override
-    public String getName()
+    public BlockEncodingId id()
     {
-        return NAME;
+        return LAZY;
     }
 
     @Override

@@ -20,6 +20,7 @@ import io.trino.spi.type.MapType;
 
 import java.util.Optional;
 
+import static io.trino.spi.block.BlockEncodingId.MAP;
 import static io.trino.spi.block.MapBlock.createMapBlockInternal;
 import static io.trino.spi.block.MapHashTables.HASH_MULTIPLIER;
 import static io.trino.spi.block.MapHashTables.HashBuildMode.DUPLICATE_NOT_CHECKED;
@@ -28,12 +29,10 @@ import static java.lang.String.format;
 public class MapBlockEncoding
         implements BlockEncoding
 {
-    public static final String NAME = "MAP";
-
     @Override
-    public String getName()
+    public BlockEncodingId id()
     {
-        return NAME;
+        return MAP;
     }
 
     @Override

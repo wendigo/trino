@@ -18,6 +18,7 @@ import io.airlift.slice.SliceInput;
 import io.airlift.slice.SliceOutput;
 import io.trino.spi.block.Block;
 import io.trino.spi.block.BlockEncoding;
+import io.trino.spi.block.BlockEncodingId;
 import io.trino.spi.block.BlockEncodingSerde;
 import io.trino.spi.type.Type;
 import io.trino.spi.type.TypeId;
@@ -33,7 +34,7 @@ import static java.util.Objects.requireNonNull;
 public final class InternalBlockEncodingSerde
         implements BlockEncodingSerde
 {
-    private final Function<String, BlockEncoding> blockEncodings;
+    private final Function<BlockEncodingId, BlockEncoding> blockEncodings;
     private final Function<TypeId, Type> types;
 
     @Inject
@@ -43,7 +44,7 @@ public final class InternalBlockEncodingSerde
     }
 
     @VisibleForTesting
-    InternalBlockEncodingSerde(Function<String, BlockEncoding> blockEncodings, Function<TypeId, Type> types)
+    InternalBlockEncodingSerde(Function<BlockEncodingId, BlockEncoding> blockEncodings, Function<TypeId, Type> types)
     {
         this.blockEncodings = requireNonNull(blockEncodings, "blockEncodings is null");
         this.types = requireNonNull(types, "types is null");
@@ -53,10 +54,10 @@ public final class InternalBlockEncodingSerde
     public Block readBlock(SliceInput input)
     {
         // read the encoding name
-        String encodingName = readLengthPrefixedString(input);
+        short id = input.readShort();
 
         // look up the encoding factory
-        BlockEncoding blockEncoding = blockEncodings.apply(encodingName);
+        BlockEncoding blockEncoding = blockEncodings.apply(BlockEncodingId.forId(id));
 
         // load read the encoding factory from the output stream
         return blockEncoding.readBlock(this, input);
@@ -67,10 +68,10 @@ public final class InternalBlockEncodingSerde
     {
         while (true) {
             // get the encoding name
-            String encodingName = block.getEncodingName();
+            BlockEncodingId id = block.encodingId();
 
             // look up the BlockEncoding
-            BlockEncoding blockEncoding = blockEncodings.apply(encodingName);
+            BlockEncoding blockEncoding = blockEncodings.apply(id);
 
             // see if a replacement block should be written instead
             Optional<Block> replacementBlock = blockEncoding.replacementBlockForWrite(block);
@@ -79,8 +80,8 @@ public final class InternalBlockEncodingSerde
                 continue;
             }
 
-            // write the name to the output
-            writeLengthPrefixedString(output, encodingName);
+            // write the id to the output
+            output.writeShort(id.id());
 
             // write the block to the output
             blockEncoding.writeBlock(this, output, block);
@@ -113,9 +114,7 @@ public final class InternalBlockEncodingSerde
     private static String readLengthPrefixedString(SliceInput input)
     {
         int length = input.readInt();
-        byte[] bytes = new byte[length];
-        input.readBytes(bytes);
-        return new String(bytes, UTF_8);
+        return input.readSlice(length).toStringUtf8();
     }
 
     private static void writeLengthPrefixedString(SliceOutput output, String value)

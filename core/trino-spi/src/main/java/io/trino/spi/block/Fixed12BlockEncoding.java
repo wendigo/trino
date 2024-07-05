@@ -16,18 +16,17 @@ package io.trino.spi.block;
 import io.airlift.slice.SliceInput;
 import io.airlift.slice.SliceOutput;
 
+import static io.trino.spi.block.BlockEncodingId.FIXED_12;
 import static io.trino.spi.block.EncoderUtil.decodeNullBits;
 import static io.trino.spi.block.EncoderUtil.encodeNullsAsBits;
 
 public class Fixed12BlockEncoding
         implements BlockEncoding
 {
-    public static final String NAME = "FIXED12";
-
     @Override
-    public String getName()
+    public BlockEncodingId id()
     {
-        return NAME;
+        return FIXED_12;
     }
 
     @Override

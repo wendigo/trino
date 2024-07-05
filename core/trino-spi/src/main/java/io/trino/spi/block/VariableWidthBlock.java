@@ -25,6 +25,7 @@ import java.util.function.ObjLongConsumer;
 import static io.airlift.slice.SizeOf.instanceSize;
 import static io.airlift.slice.SizeOf.sizeOf;
 import static io.airlift.slice.Slices.EMPTY_SLICE;
+import static io.trino.spi.block.BlockEncodingId.VARIABLE_WIDTH;
 import static io.trino.spi.block.BlockUtil.checkArrayRange;
 import static io.trino.spi.block.BlockUtil.checkReadablePosition;
 import static io.trino.spi.block.BlockUtil.checkValidRegion;
@@ -282,9 +283,9 @@ public final class VariableWidthBlock
     }
 
     @Override
-    public String getEncodingName()
+    public BlockEncodingId encodingId()
     {
-        return VariableWidthBlockEncoding.NAME;
+        return VARIABLE_WIDTH;
     }
 
     @Override

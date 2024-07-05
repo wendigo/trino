@@ -21,6 +21,7 @@ import java.util.OptionalInt;
 import java.util.function.ObjLongConsumer;
 
 import static io.airlift.slice.SizeOf.instanceSize;
+import static io.trino.spi.block.BlockEncodingId.RLE;
 import static io.trino.spi.block.BlockUtil.checkArrayRange;
 import static io.trino.spi.block.BlockUtil.checkReadablePosition;
 import static io.trino.spi.block.BlockUtil.checkValidPosition;
@@ -144,9 +145,9 @@ public final class RunLengthEncodedBlock
     }
 
     @Override
-    public String getEncodingName()
+    public BlockEncodingId encodingId()
     {
-        return RunLengthBlockEncoding.NAME;
+        return RLE;
     }
 
     @Override

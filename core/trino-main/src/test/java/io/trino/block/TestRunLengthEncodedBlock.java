@@ -19,13 +19,13 @@ import io.trino.spi.block.BlockBuilder;
 import io.trino.spi.block.ByteArrayBlockBuilder;
 import io.trino.spi.block.IntArrayBlockBuilder;
 import io.trino.spi.block.LongArrayBlockBuilder;
-import io.trino.spi.block.RunLengthBlockEncoding;
 import io.trino.spi.block.RunLengthEncodedBlock;
 import io.trino.spi.block.ShortArrayBlockBuilder;
 import io.trino.spi.block.VariableWidthBlock;
 import io.trino.spi.block.VariableWidthBlockBuilder;
 import org.junit.jupiter.api.Test;
 
+import static io.trino.spi.block.BlockEncodingId.RLE;
 import static org.assertj.core.api.Assertions.assertThat;
 
 public class TestRunLengthEncodedBlock
@@ -87,7 +87,7 @@ public class TestRunLengthEncodedBlock
     {
         LongArrayBlockBuilder blockBuilder = new LongArrayBlockBuilder(null, 100);
         populateNullValues(blockBuilder, 100);
-        assertThat(blockBuilder.build().getEncodingName()).isEqualTo(RunLengthBlockEncoding.NAME);
+        assertThat(blockBuilder.build().getEncodingName()).isEqualTo(RLE.name());
     }
 
     @Test
@@ -95,7 +95,7 @@ public class TestRunLengthEncodedBlock
     {
         IntArrayBlockBuilder blockBuilder = new IntArrayBlockBuilder(null, 100);
         populateNullValues(blockBuilder, 100);
-        assertThat(blockBuilder.build().getEncodingName()).isEqualTo(RunLengthBlockEncoding.NAME);
+        assertThat(blockBuilder.build().getEncodingName()).isEqualTo(RLE.name());
     }
 
     @Test
@@ -103,7 +103,7 @@ public class TestRunLengthEncodedBlock
     {
         ShortArrayBlockBuilder blockBuilder = new ShortArrayBlockBuilder(null, 100);
         populateNullValues(blockBuilder, 100);
-        assertThat(blockBuilder.build().getEncodingName()).isEqualTo(RunLengthBlockEncoding.NAME);
+        assertThat(blockBuilder.build().getEncodingName()).isEqualTo(RLE.name());
     }
 
     @Test
@@ -111,7 +111,7 @@ public class TestRunLengthEncodedBlock
     {
         ByteArrayBlockBuilder blockBuilder = new ByteArrayBlockBuilder(null, 100);
         populateNullValues(blockBuilder, 100);
-        assertThat(blockBuilder.build().getEncodingName()).isEqualTo(RunLengthBlockEncoding.NAME);
+        assertThat(blockBuilder.build().getEncodingName()).isEqualTo(RLE.name());
     }
 
     @Test

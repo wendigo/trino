@@ -561,6 +561,81 @@
                                     <newValue>{@com.fasterxml.jackson.annotation.JsonSubTypes.Type(value = io.trino.spi.predicate.AllOrNoneValueSet.class, name = "allOrNone"), @com.fasterxml.jackson.annotation.JsonSubTypes.Type(value = io.trino.spi.predicate.EquatableValueSet.class, name = "equatable"), @com.fasterxml.jackson.annotation.JsonSubTypes.Type(value = io.trino.spi.predicate.SortedRangeSet.class, name = "sortable")}</newValue>
                                     <justification>cleanup</justification>
                                 </item>
+                                <item>
+                                    <ignore>true</ignore>
+                                    <code>java.field.removedWithConstant</code>
+                                    <old>field io.trino.spi.block.ArrayBlockEncoding.NAME</old>
+                                </item>
+                                <item>
+                                    <ignore>true</ignore>
+                                    <code>java.method.addedToInterface</code>
+                                    <new>method io.trino.spi.block.BlockEncodingId io.trino.spi.block.Block::encodingId()</new>
+                                </item>
+                                <item>
+                                    <ignore>true</ignore>
+                                    <code>java.method.addedToInterface</code>
+                                    <new>method io.trino.spi.block.BlockEncodingId io.trino.spi.block.BlockEncoding::id()</new>
+                                </item>
+                                <item>
+                                    <ignore>true</ignore>
+                                    <code>java.field.removedWithConstant</code>
+                                    <old>field io.trino.spi.block.ByteArrayBlockEncoding.NAME</old>
+                                </item>
+                                <item>
+                                    <ignore>true</ignore>
+                                    <code>java.field.removedWithConstant</code>
+                                    <old>field io.trino.spi.block.DictionaryBlockEncoding.NAME</old>
+                                </item>
+                                <item>
+                                    <ignore>true</ignore>
+                                    <code>java.field.removedWithConstant</code>
+                                    <old>field io.trino.spi.block.Fixed12BlockEncoding.NAME</old>
+                                </item>
+                                <item>
+                                    <ignore>true</ignore>
+                                    <code>java.field.removedWithConstant</code>
+                                    <old>field io.trino.spi.block.Int128ArrayBlockEncoding.NAME</old>
+                                </item>
+                                <item>
+                                    <ignore>true</ignore>
+                                    <code>java.field.removedWithConstant</code>
+                                    <old>field io.trino.spi.block.IntArrayBlockEncoding.NAME</old>
+                                </item>
+                                <item>
+                                    <ignore>true</ignore>
+                                    <code>java.field.removedWithConstant</code>
+                                    <old>field io.trino.spi.block.LazyBlockEncoding.NAME</old>
+                                </item>
+                                <item>
+                                    <ignore>true</ignore>
+                                    <code>java.field.removedWithConstant</code>
+                                    <old>field io.trino.spi.block.LongArrayBlockEncoding.NAME</old>
+                                </item>
+                                <item>
+                                    <ignore>true</ignore>
+                                    <code>java.field.removedWithConstant</code>
+                                    <old>field io.trino.spi.block.MapBlockEncoding.NAME</old>
+                                </item>
+                                <item>
+                                    <ignore>true</ignore>
+                                    <code>java.field.removedWithConstant</code>
+                                    <old>field io.trino.spi.block.RowBlockEncoding.NAME</old>
+                                </item>
+                                <item>
+                                    <ignore>true</ignore>
+                                    <code>java.field.removedWithConstant</code>
+                                    <old>field io.trino.spi.block.RunLengthBlockEncoding.NAME</old>
+                                </item>
+                                <item>
+                                    <ignore>true</ignore>
+                                    <code>java.field.removedWithConstant</code>
+                                    <old>field io.trino.spi.block.ShortArrayBlockEncoding.NAME</old>
+                                </item>
+                                <item>
+                                    <ignore>true</ignore>
+                                    <code>java.field.removedWithConstant</code>
+                                    <old>field io.trino.spi.block.VariableWidthBlockEncoding.NAME</old>
+                                </item>
                             </differences>
                         </revapi.differences>
                     </analysisConfiguration>

@@ -19,15 +19,15 @@ import io.airlift.slice.SliceOutput;
 
 import java.util.Optional;
 
+import static io.trino.spi.block.BlockEncodingId.ROW;
+
 public class RowBlockEncoding
         implements BlockEncoding
 {
-    public static final String NAME = "ROW";
-
     @Override
-    public String getName()
+    public BlockEncodingId id()
     {
-        return NAME;
+        return ROW;
     }
 
     @Override

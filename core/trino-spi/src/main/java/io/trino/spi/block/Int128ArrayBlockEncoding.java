@@ -16,18 +16,17 @@ package io.trino.spi.block;
 import io.airlift.slice.SliceInput;
 import io.airlift.slice.SliceOutput;
 
+import static io.trino.spi.block.BlockEncodingId.INT128;
 import static io.trino.spi.block.EncoderUtil.decodeNullBits;
 import static io.trino.spi.block.EncoderUtil.encodeNullsAsBits;
 
 public class Int128ArrayBlockEncoding
         implements BlockEncoding
 {
-    public static final String NAME = "INT128_ARRAY";
-
     @Override
-    public String getName()
+    public BlockEncodingId id()
     {
-        return NAME;
+        return INT128;
     }
 
     @Override

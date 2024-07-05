@@ -17,6 +17,7 @@ import io.airlift.slice.SliceInput;
 import io.airlift.slice.SliceOutput;
 import io.airlift.slice.Slices;
 
+import static io.trino.spi.block.BlockEncodingId.BYTE;
 import static io.trino.spi.block.EncoderUtil.decodeNullBits;
 import static io.trino.spi.block.EncoderUtil.encodeNullsAsBits;
 import static io.trino.spi.block.EncoderUtil.retrieveNullBits;
@@ -25,12 +26,10 @@ import static java.lang.System.arraycopy;
 public class ByteArrayBlockEncoding
         implements BlockEncoding
 {
-    public static final String NAME = "BYTE_ARRAY";
-
     @Override
-    public String getName()
+    public BlockEncodingId id()
     {
-        return NAME;
+        return BYTE;
     }
 
     @Override
