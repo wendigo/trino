@@ -535,10 +535,53 @@
         <resources>
             <resource>
                 <directory>src/main/resources</directory>
+                <includes>
+                    <include>oauth2/</include>
+                    <include>webapp/</include>
+                    <include>webapp-preview/dist/</include>
+                </includes>
                 <excludes>
                     <exclude>**/node_modules/**</exclude>
                 </excludes>
             </resource>
         </resources>
+        <plugins>
+            <plugin>
+                <groupId>com.github.eirslett</groupId>
+                <artifactId>frontend-maven-plugin</artifactId>
+                <version>${dep.frontend-maven-plugin.version}</version>
+                <configuration>
+                    <nodeVersion>v20.15.1</nodeVersion>
+                    <npmVersion>10.8.2</npmVersion>
+                    <workingDirectory>src/main/resources/webapp-preview</workingDirectory>
+                </configuration>
+                <executions>
+                    <execution>
+                        <id>install node and npm</id>
+                        <goals>
+                            <goal>install-node-and-npm</goal>
+                        </goals>
+                    </execution>
+                    <execution>
+                        <id>npm install</id>
+                        <goals>
+                            <goal>npm</goal>
+                        </goals>
+                        <configuration>
+                            <arguments>install</arguments>
+                        </configuration>
+                    </execution>
+                    <execution>
+                        <id>npm build</id>
+                        <goals>
+                            <goal>npm</goal>
+                        </goals>
+                        <configuration>
+                            <arguments>run build</arguments>
+                        </configuration>
+                    </execution>
+                </executions>
+            </plugin>
+        </plugins>
     </build>
 </project>
