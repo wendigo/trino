@@ -17,8 +17,10 @@ import io.trino.filesystem.Location;
 import io.trino.filesystem.TrinoFileSystem;
 import io.trino.filesystem.TrinoFileSystemFactory;
 import io.trino.filesystem.s3.S3FileSystemLoader.S3ClientFactory;
+import io.trino.filesystem.s3.S3FileSystemLoader.S3PreSignerFactory;
 import io.trino.spi.security.ConnectorIdentity;
 import software.amazon.awssdk.services.s3.S3Client;
+import software.amazon.awssdk.services.s3.presigner.S3Presigner;
 
 import java.util.Map;
 import java.util.Optional;
@@ -32,14 +34,17 @@ final class S3SecurityMappingFileSystemFactory
 {
     private final S3SecurityMappingProvider mappingProvider;
     private final S3ClientFactory clientFactory;
+    private final S3PreSignerFactory preSignerFactory;
     private final S3Context context;
     private final Location location;
     private final Executor uploadExecutor;
     private final Map<Optional<S3SecurityMappingResult>, S3Client> clients = new ConcurrentHashMap<>();
+    private final Map<Optional<S3SecurityMappingResult>, S3Presigner> preSigners = new ConcurrentHashMap<>();
 
     public S3SecurityMappingFileSystemFactory(
             S3SecurityMappingProvider mappingProvider,
             S3ClientFactory clientFactory,
+            S3PreSignerFactory preSignerFactory,
             S3Context context,
             Location location,
             Executor uploadExecutor)
@@ -47,6 +52,7 @@ final class S3SecurityMappingFileSystemFactory
         this.mappingProvider = requireNonNull(mappingProvider, "mappingProvider is null");
         this.uploadExecutor = requireNonNull(uploadExecutor, "uploadExecutor is null");
         this.clientFactory = requireNonNull(clientFactory, "clientFactory is null");
+        this.preSignerFactory = requireNonNull(preSignerFactory, "preSignerFactory is null");
         this.location = requireNonNull(location, "location is null");
         this.context = requireNonNull(context, "context is null");
     }
@@ -57,6 +63,7 @@ final class S3SecurityMappingFileSystemFactory
         Optional<S3SecurityMappingResult> mapping = mappingProvider.getMapping(identity, location);
 
         S3Client client = clients.computeIfAbsent(mapping, _ -> clientFactory.create(mapping));
+        S3Presigner preSigner = preSigners.computeIfAbsent(mapping, _ -> preSignerFactory.create(mapping));
 
         S3Context context = this.context.withCredentials(identity);
 
@@ -64,6 +71,6 @@ final class S3SecurityMappingFileSystemFactory
             context = context.withKmsKeyId(mapping.get().kmsKeyId().get());
         }
 
-        return new S3FileSystem(uploadExecutor, client, context);
+        return new S3FileSystem(uploadExecutor, client, preSigner, context);
     }
 }

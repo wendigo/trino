@@ -17,6 +17,7 @@ import com.google.common.base.Throwables;
 
 import java.io.FileNotFoundException;
 import java.io.IOException;
+import java.time.Duration;
 import java.util.Collection;
 import java.util.Optional;
 import java.util.Set;
@@ -227,6 +228,18 @@ public interface TrinoFileSystem
      */
     Optional<Location> createTemporaryDirectory(Location targetPath, String temporaryPrefix, String relativePrefix)
             throws IOException;
+
+    /**
+     * Returns the direct pre-signed URI location for the given storage location.
+     *
+     * This is used to retrieve the file directly from the storage location without going through
+     * the Trino server. This is useful for large files where the Trino server would be a bottleneck.
+     */
+    default Optional<UriLocation> preSignedUri(Location location, Duration ttl)
+            throws IOException
+    {
+        return Optional.empty();
+    }
 
     /**
      * Checks whether given exception is unrecoverable, so that further retries won't help

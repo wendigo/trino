@@ -21,19 +21,26 @@ import io.trino.filesystem.TrinoFileSystem;
 import io.trino.filesystem.TrinoFileSystemException;
 import io.trino.filesystem.TrinoInputFile;
 import io.trino.filesystem.TrinoOutputFile;
+import io.trino.filesystem.UriLocation;
 import software.amazon.awssdk.core.exception.SdkException;
 import software.amazon.awssdk.services.s3.S3Client;
 import software.amazon.awssdk.services.s3.model.CommonPrefix;
 import software.amazon.awssdk.services.s3.model.DeleteObjectRequest;
 import software.amazon.awssdk.services.s3.model.DeleteObjectsRequest;
 import software.amazon.awssdk.services.s3.model.DeleteObjectsResponse;
+import software.amazon.awssdk.services.s3.model.GetObjectRequest;
 import software.amazon.awssdk.services.s3.model.ListObjectsV2Request;
 import software.amazon.awssdk.services.s3.model.ObjectIdentifier;
 import software.amazon.awssdk.services.s3.model.RequestPayer;
 import software.amazon.awssdk.services.s3.model.S3Error;
 import software.amazon.awssdk.services.s3.model.S3Object;
+import software.amazon.awssdk.services.s3.presigner.S3Presigner;
+import software.amazon.awssdk.services.s3.presigner.model.GetObjectPresignRequest;
+import software.amazon.awssdk.services.s3.presigner.model.PresignedGetObjectRequest;
 
 import java.io.IOException;
+import java.net.URISyntaxException;
+import java.time.Duration;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.HashMap;
@@ -55,13 +62,15 @@ final class S3FileSystem
 {
     private final Executor uploadExecutor;
     private final S3Client client;
+    private final S3Presigner preSigner;
     private final S3Context context;
     private final RequestPayer requestPayer;
 
-    public S3FileSystem(Executor uploadExecutor, S3Client client, S3Context context)
+    public S3FileSystem(Executor uploadExecutor, S3Client client, S3Presigner preSigner, S3Context context)
     {
         this.uploadExecutor = requireNonNull(uploadExecutor, "uploadExecutor is null");
         this.client = requireNonNull(client, "client is null");
+        this.preSigner = requireNonNull(preSigner, "preSigner is null");
         this.context = requireNonNull(context, "context is null");
         this.requestPayer = context.requestPayer();
     }
@@ -273,6 +282,33 @@ final class S3FileSystem
         validateS3Location(targetPath);
         // S3 does not have directories
         return Optional.empty();
+    }
+
+    @Override
+    public Optional<UriLocation> preSignedUri(Location location, Duration ttl)
+            throws IOException
+    {
+        location.verifyValidFileLocation();
+        S3Location s3Location = new S3Location(location);
+
+        GetObjectRequest request = GetObjectRequest.builder()
+                .overrideConfiguration(context::applyCredentialProviderOverride)
+                .requestPayer(requestPayer)
+                .key(s3Location.key())
+                .bucket(s3Location.bucket())
+                .build();
+
+        GetObjectPresignRequest preSignRequest = GetObjectPresignRequest.builder()
+                .signatureDuration(ttl)
+                .getObjectRequest(request)
+                .build();
+        try {
+            PresignedGetObjectRequest preSigned = preSigner.presignGetObject(preSignRequest);
+            return Optional.of(new UriLocation(preSigned.url().toURI(), preSigned.signedHeaders()));
+        }
+        catch (SdkException | URISyntaxException e) {
+            throw new TrinoFileSystemException("Failed to delete file: " + location, e);
+        }
     }
 
     @SuppressWarnings("ResultOfObjectAllocationIgnored")
