@@ -15,6 +15,7 @@ package io.trino.filesystem.gcs;
 
 import com.google.api.gax.paging.Page;
 import com.google.cloud.storage.Blob;
+import com.google.cloud.storage.BlobId;
 import com.google.cloud.storage.BlobInfo;
 import com.google.cloud.storage.Storage;
 import com.google.cloud.storage.Storage.BlobListOption;
@@ -30,20 +31,27 @@ import io.trino.filesystem.TrinoFileSystem;
 import io.trino.filesystem.TrinoFileSystemException;
 import io.trino.filesystem.TrinoInputFile;
 import io.trino.filesystem.TrinoOutputFile;
+import io.trino.filesystem.UriLocation;
 
 import java.io.IOException;
+import java.net.URISyntaxException;
+import java.net.URL;
+import java.time.Duration;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collection;
 import java.util.Iterator;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 import java.util.OptionalLong;
 import java.util.Set;
+import java.util.concurrent.TimeUnit;
 
 import static com.google.cloud.storage.Storage.BlobListOption.currentDirectory;
 import static com.google.cloud.storage.Storage.BlobListOption.matchGlob;
 import static com.google.cloud.storage.Storage.BlobListOption.pageSize;
+import static com.google.cloud.storage.Storage.SignUrlOption.withV4Signature;
 import static com.google.common.base.Preconditions.checkState;
 import static com.google.common.collect.Iterables.partition;
 import static io.airlift.concurrent.MoreFutures.getFutureValue;
@@ -270,6 +278,23 @@ public class GcsFileSystem
         validateGcsLocation(targetPath);
         // GCS does not have directories
         return Optional.empty();
+    }
+
+    @Override
+    public Optional<UriLocation> preSignedUri(Location location, Duration ttl)
+            throws IOException
+    {
+        GcsLocation gcsLocation = new GcsLocation(location);
+        BlobInfo blobInfo = BlobInfo.newBuilder(BlobId.of(gcsLocation.bucket(), gcsLocation.path())).build();
+
+        URL url = storage.signUrl(blobInfo, ttl.toMillis(), TimeUnit.MILLISECONDS, withV4Signature());
+
+        try {
+            return Optional.of(new UriLocation(url.toURI(), Map.of()));
+        }
+        catch (URISyntaxException e) {
+            throw new IOException("Error creating URI for location: " + location, e);
+        }
     }
 
     @SuppressWarnings("ResultOfObjectAllocationIgnored")
