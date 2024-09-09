@@ -20,8 +20,12 @@ import com.azure.core.util.TracingOptions;
 import com.azure.storage.blob.BlobClient;
 import com.azure.storage.blob.BlobContainerClient;
 import com.azure.storage.blob.BlobContainerClientBuilder;
+import com.azure.storage.blob.BlobServiceClient;
 import com.azure.storage.blob.models.BlobItem;
 import com.azure.storage.blob.models.ListBlobsOptions;
+import com.azure.storage.blob.models.UserDelegationKey;
+import com.azure.storage.blob.sas.BlobSasPermission;
+import com.azure.storage.blob.sas.BlobServiceSasSignatureValues;
 import com.azure.storage.blob.specialized.BlockBlobClient;
 import com.azure.storage.file.datalake.DataLakeDirectoryClient;
 import com.azure.storage.file.datalake.DataLakeFileClient;
@@ -41,8 +45,14 @@ import io.trino.filesystem.TrinoFileSystem;
 import io.trino.filesystem.TrinoFileSystemException;
 import io.trino.filesystem.TrinoInputFile;
 import io.trino.filesystem.TrinoOutputFile;
+import io.trino.filesystem.UriLocation;
 
 import java.io.IOException;
+import java.net.URI;
+import java.time.Duration;
+import java.time.OffsetDateTime;
+import java.time.temporal.ChronoUnit;
+import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.OptionalLong;
@@ -405,6 +415,39 @@ public class AzureFileSystem
 
         createDirectory(temporary);
         return Optional.of(temporary);
+    }
+
+    @Override
+    public Optional<UriLocation> preSignedUri(Location location, Duration ttl)
+            throws IOException
+    {
+        AzureLocation azureLocation = new AzureLocation(location);
+        BlobContainerClient client = createBlobContainerClient(azureLocation);
+        BlobServiceClient blobServiceClient = client.getServiceClient();
+
+        BlobSasPermission blobSasPermission = new BlobSasPermission()
+                .setReadPermission(true);
+
+        OffsetDateTime expiryTime = OffsetDateTime.now().plus(ttl.toMillis(), ChronoUnit.MILLIS);
+
+        BlobServiceSasSignatureValues values = new BlobServiceSasSignatureValues(expiryTime, blobSasPermission)
+                .setStartTime(OffsetDateTime.now());
+
+        try {
+            UserDelegationKey userDelegationKey = blobServiceClient.getUserDelegationKey(
+                    OffsetDateTime.now(),
+                    expiryTime);
+
+            URI uri = URI.create("https://%s/%s?%s".formatted(
+                    endpoint,
+                    azureLocation.location().toString(),
+                    client.generateUserDelegationSas(values, userDelegationKey)));
+
+            return Optional.of(new UriLocation(uri, Map.of()));
+        }
+        catch (Exception e) {
+            throw new IOException("Failed to generate pre-signed URI", e);
+        }
     }
 
     private Set<Location> listGen2Directories(AzureLocation location)

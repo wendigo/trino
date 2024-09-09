@@ -180,6 +180,12 @@ public abstract class AbstractTestAzureFileSystem
     }
 
     @Override
+    protected boolean supportsPreSignedUri()
+    {
+        return true;
+    }
+
+    @Override
     protected final TrinoFileSystem getFileSystem()
     {
         return fileSystem;
