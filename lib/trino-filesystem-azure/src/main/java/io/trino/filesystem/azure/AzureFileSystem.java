@@ -443,6 +443,7 @@ public class AzureFileSystem
                     azureLocation.location().toString(),
                     client.generateUserDelegationSas(values, userDelegationKey)));
 
+            System.out.println("Azure PreSigned " + uri);
             return Optional.of(new UriLocation(uri, Map.of()));
         }
         catch (Exception e) {
