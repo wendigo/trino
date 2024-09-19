@@ -146,7 +146,7 @@
     </scm>
 
     <properties>
-        <project.build.targetJdk>22</project.build.targetJdk>
+        <project.build.targetJdk>24</project.build.targetJdk>
         <!-- for reproducible build support, updated by release plugin -->
         <project.build.outputTimestamp>2024-09-18T01:24:05Z</project.build.outputTimestamp>
         <!-- TODO remove this property when no module overrides it -->
@@ -155,7 +155,7 @@
         <air.check.skip-spotbugs>true</air.check.skip-spotbugs>
         <air.check.skip-pmd>true</air.check.skip-pmd>
         <air.check.skip-jacoco>true</air.check.skip-jacoco>
-        <air.java.version>22.0.0</air.java.version>
+        <air.java.version>24</air.java.version>
         <air.javadoc.lint>syntax,reference,html,-missing</air.javadoc.lint>
         <air.modernizer.java-version>8</air.modernizer.java-version>
         <air.release.preparation-goals>clean verify -DskipTests</air.release.preparation-goals>
@@ -189,6 +189,8 @@
         <dep.airlift.version>268</dep.airlift.version>
         <dep.alluxio.version>2.9.6</dep.alluxio.version>
         <dep.antlr.version>4.13.2</dep.antlr.version>
+        <!-- temporary until 9.8 is released -->
+        <dep.asm.version>9.8-SNAPSHOT</dep.asm.version>
         <dep.avro.version>1.12.0</dep.avro.version>
         <dep.aws-sdk.version>1.12.772</dep.aws-sdk.version>
         <dep.cassandra.version>4.17.0</dep.cassandra.version>
@@ -2341,6 +2343,20 @@
         </dependencies>
     </dependencyManagement>
 
+    <repositories>
+        <repository>
+            <id>asm.snapshots</id>
+            <url>https://repository.ow2.org/nexus/content/repositories/snapshots</url>
+        </repository>
+    </repositories>
+
+    <pluginRepositories>
+        <pluginRepository>
+            <id>asm-plugin.snapshots</id>
+            <url>https://repository.ow2.org/nexus/content/repositories/snapshots</url>
+        </pluginRepository>
+    </pluginRepositories>
+
     <build>
         <pluginManagement>
             <plugins>
@@ -2460,6 +2476,8 @@
                     <groupId>org.apache.maven.plugins</groupId>
                     <artifactId>maven-enforcer-plugin</artifactId>
                     <configuration>
+                        <!-- temporary until extra-enforcer-rules is released -->
+                        <skip>true</skip>
                         <rules>
                             <bannedDependencies>
                                 <excludes combine.children="append">
@@ -2496,6 +2514,10 @@
                             <requirePropertyDiverges>
                                 <property>project.description</property>
                             </requirePropertyDiverges>
+                            <!-- temporary until https://github.com/mojohaus/extra-enforcer-rules/pull/308 lands -->
+                            <enforceBytecodeVersion>
+                                <maxJdkVersion>23</maxJdkVersion>
+                            </enforceBytecodeVersion>
                         </rules>
                     </configuration>
                 </plugin>
