@@ -300,7 +300,7 @@ public class OpenLineageListener
                                     .inputFields(column
                                             .getSourceColumns()
                                             .stream()
-                                            .map(inputColumn -> openLineage.newColumnLineageDatasetFacetFieldsAdditionalInputFieldsBuilder()
+                                            .map(inputColumn -> openLineage.newInputFieldBuilder()
                                                     .field(inputColumn.getColumnName())
                                                     .namespace(this.datasetNamespace)
                                                     .name(getDatasetName(inputColumn.getCatalog(), inputColumn.getSchema(), inputColumn.getTable()))
@@ -313,7 +313,7 @@ public class OpenLineageListener
                             .namespace(this.datasetNamespace)
                             .name(getDatasetName(outputMetadata.getCatalogName(), outputMetadata.getSchema(), outputMetadata.getTable()))
                             .facets(openLineage.newDatasetFacetsBuilder()
-                                    .columnLineage(openLineage.newColumnLineageDatasetFacet(columnLineageDatasetFacetFieldsBuilder.build()))
+                                    .columnLineage(openLineage.newColumnLineageDatasetFacet(columnLineageDatasetFacetFieldsBuilder.build(), List.of()))
                                     .schema(openLineage.newSchemaDatasetFacetBuilder()
                                             .fields(
                                                     outputColumns.stream()
