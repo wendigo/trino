@@ -47,7 +47,7 @@ import static io.trino.server.security.ResourceSecurity.AccessType.PUBLIC;
 import static java.nio.charset.StandardCharsets.UTF_8;
 import static java.util.Objects.requireNonNull;
 
-@Path("/v1/spooled/segments/{identifier}")
+@Path("/v1/spooled")
 @ResourceSecurity(PUBLIC)
 public class CoordinatorSegmentResource
 {
@@ -64,6 +64,7 @@ public class CoordinatorSegmentResource
     }
 
     @GET
+    @Path("/download/{identifier}")
     @Produces(MediaType.APPLICATION_OCTET_STREAM)
     @ResourceSecurity(PUBLIC)
     public Response download(@Context UriInfo uriInfo, @PathParam("identifier") String identifier, @Context HttpHeaders headers)
@@ -91,7 +92,8 @@ public class CoordinatorSegmentResource
         };
     }
 
-    @DELETE
+    @GET
+    @Path("/ack/{identifier}")
     @ResourceSecurity(PUBLIC)
     public Response acknowledge(@PathParam("identifier") String identifier, @Context HttpHeaders headers)
             throws IOException
@@ -105,6 +107,15 @@ public class CoordinatorSegmentResource
                     .entity(e.toString())
                     .build();
         }
+    }
+
+    @DELETE
+    @Path("/ack/{identifier}")
+    @ResourceSecurity(PUBLIC)
+    public Response deleteAcknowledge(@PathParam("identifier") String identifier, @Context HttpHeaders headers)
+            throws IOException
+    {
+        return acknowledge(identifier, headers);
     }
 
     public static UriBuilder spooledSegmentUriBuilder(ExternalUriInfo info)
