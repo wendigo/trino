@@ -117,30 +117,32 @@ public class ResultRowsDecoder
 
     private ResultRows segmentToRows(Segment segment)
     {
-        if (segment instanceof InlineSegment) {
-            InlineSegment inlineSegment = (InlineSegment) segment;
-            try {
-                return decoder.decode(new ByteArrayInputStream(inlineSegment.getData()), inlineSegment.getMetadata());
+        return new LazyResultRows(() -> {
+            if (segment instanceof InlineSegment) {
+                InlineSegment inlineSegment = (InlineSegment) segment;
+                try {
+                    return decoder.decode(new ByteArrayInputStream(inlineSegment.getData()), inlineSegment.getMetadata());
+                }
+                catch (IOException e) {
+                    throw new UncheckedIOException(e);
+                }
             }
-            catch (IOException e) {
-                throw new UncheckedIOException(e);
-            }
-        }
 
-        if (segment instanceof SpooledSegment) {
-            SpooledSegment spooledSegment = (SpooledSegment) segment;
+            if (segment instanceof SpooledSegment) {
+                SpooledSegment spooledSegment = (SpooledSegment) segment;
 
-            try {
-                // The returned rows are lazy which means that decoder is responsible for closing input stream
-                InputStream stream = loader.load(spooledSegment);
-                return decoder.decode(stream, spooledSegment.getMetadata());
+                try {
+                    // The returned rows are lazy which means that decoder is responsible for closing input stream
+                    InputStream stream = loader.load(spooledSegment);
+                    return decoder.decode(stream, spooledSegment.getMetadata());
+                }
+                catch (IOException e) {
+                    throw new RuntimeException(e);
+                }
             }
-            catch (IOException e) {
-                throw new RuntimeException(e);
-            }
-        }
 
-        throw new UnsupportedOperationException("Unsupported segment type: " + segment.getClass().getName());
+            throw new UnsupportedOperationException("Unsupported segment type: " + segment.getClass().getName());
+        });
     }
 
     public Optional<String> getEncoding()
