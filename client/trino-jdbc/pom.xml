@@ -389,7 +389,13 @@
                     <groupId>org.apache.maven.plugins</groupId>
                     <artifactId>maven-enforcer-plugin</artifactId>
                     <configuration>
-                        <rules>
+                        <rules combine.children="merge">
+                            <enforceBytecodeVersion>
+                                <excludes>
+                                    <!-- aircompressor-v3 works only on JDK 22+, but it's used by the JDK22 code -->
+                                    <exclude>io.airlift:aircompressor-v3</exclude>
+                                </excludes>
+                            </enforceBytecodeVersion>
                             <requireUpperBoundDeps>
                                 <excludes combine.children="append">
                                     <exclude>io.airlift:units</exclude>
