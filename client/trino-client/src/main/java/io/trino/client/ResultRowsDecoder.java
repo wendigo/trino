@@ -118,8 +118,12 @@ public class ResultRowsDecoder
 
     @Override
     public void close()
-            throws Exception
     {
-        loader.close();
+        try {
+            loader.close();
+        }
+        catch (Exception e) {
+            throw new RuntimeException(e);
+        }
     }
 }

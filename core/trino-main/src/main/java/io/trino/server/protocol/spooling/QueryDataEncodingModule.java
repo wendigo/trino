@@ -17,7 +17,10 @@ import com.google.inject.Binder;
 import com.google.inject.Scopes;
 import com.google.inject.multibindings.Multibinder;
 import io.airlift.configuration.AbstractConfigurationAwareModule;
+import io.trino.server.protocol.spooling.encoding.ArrowIpcQueryDataEncoder;
 import io.trino.server.protocol.spooling.encoding.JsonQueryDataEncoder;
+import org.apache.arrow.memory.BufferAllocator;
+import org.apache.arrow.memory.RootAllocator;
 
 import static com.google.inject.multibindings.Multibinder.newSetBinder;
 
@@ -39,6 +42,19 @@ public class QueryDataEncodingModule
         }
         if (config.isJsonLz4Enabled()) {
             encoderFactories.addBinding().to(JsonQueryDataEncoder.Lz4Factory.class).in(Scopes.SINGLETON);
+        }
+        if (config.isArrowIpcEnabled() || config.isArrowIpcLz4Enabled() || config.isArrowIpcZstdEnabled()) {
+            binder.bind(BufferAllocator.class).toInstance(new RootAllocator());
+
+            if (config.isArrowIpcEnabled()) {
+                encoderFactories.addBinding().to(ArrowIpcQueryDataEncoder.Factory.class).in(Scopes.SINGLETON);
+            }
+            if (config.isArrowIpcZstdEnabled()) {
+                encoderFactories.addBinding().to(ArrowIpcQueryDataEncoder.ZstdFactory.class).in(Scopes.SINGLETON);
+            }
+            if (config.isArrowIpcLz4Enabled()) {
+                encoderFactories.addBinding().to(ArrowIpcQueryDataEncoder.Lz4Factory.class).in(Scopes.SINGLETON);
+            }
         }
         binder.bind(QueryDataEncoders.class).in(Scopes.SINGLETON);
     }

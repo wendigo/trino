@@ -22,7 +22,7 @@ import io.trino.memory.context.LocalMemoryContext;
 import io.trino.operator.OperationTimer.OperationTiming;
 import io.trino.server.protocol.OutputColumn;
 import io.trino.server.protocol.spooling.QueryDataEncoder;
-import io.trino.server.protocol.spooling.SpooledBlock;
+import io.trino.server.protocol.spooling.SpooledSegmentBlock;
 import io.trino.spi.Mergeable;
 import io.trino.spi.Page;
 import io.trino.spi.block.Block;
@@ -55,9 +55,9 @@ import static io.trino.operator.OutputSpoolingOperatorFactory.OutputSpoolingOper
 import static io.trino.operator.OutputSpoolingOperatorFactory.OutputSpoolingOperator.State.HAS_LAST_OUTPUT;
 import static io.trino.operator.OutputSpoolingOperatorFactory.OutputSpoolingOperator.State.HAS_OUTPUT;
 import static io.trino.operator.OutputSpoolingOperatorFactory.OutputSpoolingOperator.State.NEEDS_INPUT;
-import static io.trino.server.protocol.spooling.SpooledBlock.SPOOLING_METADATA_SYMBOL;
-import static io.trino.server.protocol.spooling.SpooledBlock.SPOOLING_METADATA_TYPE;
-import static io.trino.server.protocol.spooling.SpooledBlock.createNonSpooledPage;
+import static io.trino.server.protocol.spooling.SpooledSegmentBlock.SPOOLING_METADATA_SYMBOL;
+import static io.trino.server.protocol.spooling.SpooledSegmentBlock.SPOOLING_METADATA_TYPE;
+import static io.trino.server.protocol.spooling.SpooledSegmentBlock.createNonSpooledPage;
 import static io.trino.server.protocol.spooling.SpoolingSessionProperties.getInitialSegmentSize;
 import static io.trino.server.protocol.spooling.SpoolingSessionProperties.getInliningMaxRows;
 import static io.trino.server.protocol.spooling.SpoolingSessionProperties.getInliningMaxSize;
@@ -287,7 +287,7 @@ public class OutputSpoolingOperatorFactory
                 controller.recordEncoded(attributes.get(SEGMENT_SIZE, Integer.class));
 
                 // This page is small (hundreds of bytes) so there is no point in tracking its memory usage
-                return emptySingleRowPage(SpooledBlock.forLocation(spoolingManager.location(segmentHandle), attributes).serialize());
+                return emptySingleRowPage(SpooledSegmentBlock.forLocation(spoolingManager.location(segmentHandle), attributes).serialize());
             }
             catch (IOException e) {
                 throw new UncheckedIOException(e);

@@ -131,6 +131,6 @@ class SpooledSegmentIterator
     @Override
     public String toString()
     {
-        return "SpooledSegmentIterator{segment=" + segment + "}";
+        return "SpooledSegmentIterator{segment=" + segment + ", iterator=" + iterator + '}';
     }
 }

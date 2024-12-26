@@ -90,7 +90,7 @@ import static com.google.common.base.Preconditions.checkArgument;
 import static com.google.common.base.Preconditions.checkState;
 import static com.google.common.collect.Collections2.filter;
 import static com.google.common.collect.ImmutableSet.toImmutableSet;
-import static io.trino.server.protocol.spooling.SpooledBlock.SPOOLING_METADATA_SYMBOL;
+import static io.trino.server.protocol.spooling.SpooledSegmentBlock.SPOOLING_METADATA_SYMBOL;
 import static io.trino.sql.planner.SymbolsExtractor.extractUnique;
 import static io.trino.sql.planner.optimizations.IndexJoinOptimizer.IndexKeyTracer;
 

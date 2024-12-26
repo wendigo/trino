@@ -38,7 +38,7 @@ import static io.airlift.json.JsonCodec.mapJsonCodec;
 import static io.airlift.slice.Slices.utf8Slice;
 import static io.trino.spi.type.VarcharType.VARCHAR;
 
-public record SpooledBlock(Slice identifier, Optional<URI> directUri, Map<String, List<String>> headers, DataAttributes attributes)
+public record SpooledSegmentBlock(Slice identifier, Optional<URI> directUri, Map<String, List<String>> headers, DataAttributes attributes)
 {
     private static final JsonCodec<Map<String, List<String>>> HEADERS_CODEC = mapJsonCodec(String.class, listJsonCodec(String.class));
     private static final JsonCodec<DataAttributes> ATTRIBUTES_CODEC = JsonCodec.jsonCodec(DataAttributes.class);
@@ -52,36 +52,36 @@ public record SpooledBlock(Slice identifier, Optional<URI> directUri, Map<String
     public static final String SPOOLING_METADATA_COLUMN_NAME = "$spooling:metadata$";
     public static final Symbol SPOOLING_METADATA_SYMBOL = new Symbol(SPOOLING_METADATA_TYPE, SPOOLING_METADATA_COLUMN_NAME);
 
-    public static SpooledBlock deserialize(Page page)
+    public static SpooledSegmentBlock deserialize(Page page)
     {
         verify(page.getPositionCount() == 1, "Spooling metadata block must have a single position");
         verify(hasMetadataBlock(page), "Spooling metadata block must have all but last channels null");
         SqlRow row = SPOOLING_METADATA_TYPE.getObject(page.getBlock(page.getChannelCount() - 1), 0);
 
         if (row.getRawFieldBlock(1).isNull(0)) {
-            return new SpooledBlock(
+            return new SpooledSegmentBlock(
                     VARCHAR.getSlice(row.getRawFieldBlock(0), 0),
                     Optional.empty(), // Not a direct location
                     HEADERS_CODEC.fromJson(VARCHAR.getSlice(row.getRawFieldBlock(2), 0).getInput()),
                     ATTRIBUTES_CODEC.fromJson(VARCHAR.getSlice(row.getRawFieldBlock(3), 0).getInput()));
         }
 
-        return new SpooledBlock(
+        return new SpooledSegmentBlock(
                 VARCHAR.getSlice(row.getRawFieldBlock(0), 0),
                 Optional.of(URI.create(VARCHAR.getSlice(row.getRawFieldBlock(1), 0).toStringUtf8())),
                 HEADERS_CODEC.fromJson(VARCHAR.getSlice(row.getRawFieldBlock(2), 0).getInput()),
                 ATTRIBUTES_CODEC.fromJson(VARCHAR.getSlice(row.getRawFieldBlock(3), 0).getInput()));
     }
 
-    public static SpooledBlock forLocation(SpooledLocation location, DataAttributes attributes)
+    public static SpooledSegmentBlock forLocation(SpooledLocation location, DataAttributes attributes)
     {
         return switch (location) {
-            case DirectLocation directLocation -> new SpooledBlock(
+            case DirectLocation directLocation -> new SpooledSegmentBlock(
                     directLocation.identifier(),
                     Optional.of(directLocation.directUri()),
                     directLocation.headers(),
                     attributes);
-            case CoordinatorLocation coordinatorLocation -> new SpooledBlock(
+            case CoordinatorLocation coordinatorLocation -> new SpooledSegmentBlock(
                     coordinatorLocation.identifier(),
                     Optional.empty(),
                     coordinatorLocation.headers(),
