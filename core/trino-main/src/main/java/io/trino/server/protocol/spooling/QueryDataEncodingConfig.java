@@ -26,6 +26,7 @@ public class QueryDataEncodingConfig
     private boolean jsonEnabled = true;
     private boolean jsonZstdEnabled = true;
     private boolean jsonLz4Enabled = true;
+    private boolean arrowIpcEnabled;
     private DataSize compressionThreshold = DataSize.of(8, KILOBYTE);
 
     public boolean isJsonEnabled()
@@ -64,6 +65,19 @@ public class QueryDataEncodingConfig
     public QueryDataEncodingConfig setJsonLz4Enabled(boolean jsonLz4Enabled)
     {
         this.jsonLz4Enabled = jsonLz4Enabled;
+        return this;
+    }
+
+    public boolean isArrowIpcEnabled()
+    {
+        return arrowIpcEnabled;
+    }
+
+    @Config("protocol.spooling.encoding.arrow-ipc.enabled")
+    @ConfigDescription("Enable uncompressed Arrow spooled encoding")
+    public QueryDataEncodingConfig setArrowIpcEnabled(boolean arrowIpcEnabled)
+    {
+        this.arrowIpcEnabled = arrowIpcEnabled;
         return this;
     }
 

@@ -31,12 +31,12 @@ import java.util.Optional;
 import static io.airlift.slice.Slices.utf8Slice;
 import static io.trino.client.spooling.DataAttribute.ROWS_COUNT;
 import static io.trino.client.spooling.DataAttribute.SEGMENT_SIZE;
-import static io.trino.server.protocol.spooling.SpooledBlock.SPOOLING_METADATA_TYPE;
+import static io.trino.server.protocol.spooling.SpooledSegmentBlock.SPOOLING_METADATA_TYPE;
 import static io.trino.spi.type.BigintType.BIGINT;
 import static org.assertj.core.api.AssertionsForClassTypes.assertThat;
 import static org.assertj.core.api.AssertionsForClassTypes.assertThatThrownBy;
 
-class TestSpooledBlock
+class TestSpooledSegmentBlock
 {
     @Test
     public void testSerializationRoundTrip()
@@ -55,35 +55,35 @@ class TestSpooledBlock
 
     public void verifySerializationRoundTrip(Slice identifier, Optional<URI> directUri, Map<String, List<String>> headers)
     {
-        SpooledBlock metadata = new SpooledBlock(identifier, directUri, headers, createDataAttributes(10, 1200));
+        SpooledSegmentBlock metadata = new SpooledSegmentBlock(identifier, directUri, headers, createDataAttributes(10, 1200));
         Page page = new Page(metadata.serialize());
-        SpooledBlock retrieved = SpooledBlock.deserialize(page);
+        SpooledSegmentBlock retrieved = SpooledSegmentBlock.deserialize(page);
         assertThat(metadata).isEqualTo(retrieved);
     }
 
     private void verifySerializationRoundTripWithNonEmptyPage(Slice identifier, Optional<URI> directUri, Map<String, List<String>> headers)
     {
-        SpooledBlock metadata = new SpooledBlock(identifier, directUri, headers, createDataAttributes(10, 1100));
+        SpooledSegmentBlock metadata = new SpooledSegmentBlock(identifier, directUri, headers, createDataAttributes(10, 1100));
         Page page = new Page(blockWithPositions(1, true), metadata.serialize());
-        SpooledBlock retrieved = SpooledBlock.deserialize(page);
+        SpooledSegmentBlock retrieved = SpooledSegmentBlock.deserialize(page);
         assertThat(metadata).isEqualTo(retrieved);
     }
 
     private void verifyThrowsErrorOnNonNullPositions(Slice identifier, Optional<URI> directUri, Map<String, List<String>> headers)
     {
-        SpooledBlock metadata = new SpooledBlock(identifier, directUri, headers, createDataAttributes(20, 1200));
+        SpooledSegmentBlock metadata = new SpooledSegmentBlock(identifier, directUri, headers, createDataAttributes(20, 1200));
 
-        assertThatThrownBy(() -> SpooledBlock.deserialize(new Page(blockWithPositions(1, false), metadata.serialize())))
+        assertThatThrownBy(() -> SpooledSegmentBlock.deserialize(new Page(blockWithPositions(1, false), metadata.serialize())))
                 .hasMessage("Spooling metadata block must have all but last channels null");
     }
 
     private void verifyThrowsErrorOnMultiplePositions(Slice identifier, Optional<URI> directUri, Map<String, List<String>> headers)
     {
-        SpooledBlock metadata = new SpooledBlock(identifier, directUri, headers, createDataAttributes(30, 1300));
+        SpooledSegmentBlock metadata = new SpooledSegmentBlock(identifier, directUri, headers, createDataAttributes(30, 1300));
         RowBlockBuilder rowBlockBuilder = SPOOLING_METADATA_TYPE.createBlockBuilder(null, 2);
         metadata.serialize(rowBlockBuilder);
         metadata.serialize(rowBlockBuilder);
-        assertThatThrownBy(() -> SpooledBlock.deserialize(new Page(blockWithPositions(2, false), rowBlockBuilder.build())))
+        assertThatThrownBy(() -> SpooledSegmentBlock.deserialize(new Page(blockWithPositions(2, false), rowBlockBuilder.build())))
                 .hasMessage("Spooling metadata block must have a single position");
     }
 

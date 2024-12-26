@@ -27,6 +27,7 @@ import java.io.ByteArrayInputStream;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.UncheckedIOException;
+import java.util.Iterator;
 import java.util.List;
 import java.util.Optional;
 
@@ -91,8 +92,20 @@ public class ResultRowsDecoder
             if (rawData.isNull()) {
                 return NULL_ROWS; // for backward compatibility instead of null
             }
+
             // RawQueryData is always typed
-            return () -> rawData.getIterable().iterator();
+            return new ResultRows() {
+                @Override
+                public void close()
+                {
+                }
+
+                @Override
+                public Iterator<List<Object>> iterator()
+                {
+                    return rawData.getIterable().iterator();
+                }
+            };
         }
 
         if (data instanceof JsonQueryData) {
@@ -100,7 +113,24 @@ public class ResultRowsDecoder
             if (jsonData.isNull()) {
                 return NULL_ROWS;
             }
-            return () -> JsonResultRows.forJsonParser(jsonData.getJsonParser(), columns).iterator();
+            return new ResultRows() {
+                @Override
+                public void close()
+                {
+                    try {
+                        jsonData.getJsonParser().close();
+                    }
+                    catch (IOException e) {
+                        throw new UncheckedIOException(e);
+                    }
+                }
+
+                @Override
+                public Iterator<List<Object>> iterator()
+                {
+                    return JsonResultRows.forJsonParser(jsonData.getJsonParser(), columns).iterator();
+                }
+            };
         }
 
         if (data instanceof EncodedQueryData) {

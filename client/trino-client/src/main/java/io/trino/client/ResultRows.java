@@ -22,7 +22,7 @@ import static java.util.Collections.emptyIterator;
  * Allows iterating over decoded result data in row-wise manner.
  */
 public interface ResultRows
-        extends Iterable<List<Object>>
+        extends Iterable<List<Object>>, AutoCloseable
 {
     ResultRows NULL_ROWS = new ResultRows() {
         @Override
@@ -38,11 +38,27 @@ public interface ResultRows
         {
             return emptyIterator();
         }
+
+        @Override
+        public void close()
+        {
+        }
     };
 
     static ResultRows fromIterableRows(Iterable<List<Object>> values)
     {
-        return values::iterator;
+        return new ResultRows() {
+            @Override
+            public Iterator<List<Object>> iterator()
+            {
+                return values.iterator();
+            }
+
+            @Override
+            public void close()
+            {
+            }
+        };
     }
 
     default boolean isNull()

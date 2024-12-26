@@ -39,7 +39,7 @@ import static io.trino.server.protocol.spooling.CoordinatorSegmentResource.spool
 import static io.trino.spi.StandardErrorCode.SERIALIZATION_ERROR;
 import static java.util.Objects.requireNonNull;
 
-public class SpooledQueryDataProducer
+public class SpoolingQueryDataProducer
         implements QueryDataProducer
 {
     private final QueryDataEncoder.Factory encoderFactory;
@@ -47,7 +47,7 @@ public class SpooledQueryDataProducer
 
     private long currentOffset;
 
-    public SpooledQueryDataProducer(QueryDataEncoder.Factory encoderFactory)
+    public SpoolingQueryDataProducer(QueryDataEncoder.Factory encoderFactory)
     {
         this.encoderFactory = requireNonNull(encoderFactory, "encoderFactory is null");
     }
@@ -59,19 +59,31 @@ public class SpooledQueryDataProducer
             return null;
         }
 
-        EncodedQueryData.Builder builder = EncodedQueryData.builder(encoderFactory.encoding());
-        UriBuilder uriBuilder = spooledSegmentUriBuilder(uriInfo);
+        List<OutputColumn> outputColumns = rows.getOutputColumns()
+                .orElseThrow(() -> new IllegalStateException("Data present without output columns"));
+
+        EncodedQueryData.Builder builder;
         if (encoder == null) {
-            encoder = encoderFactory.create(session, rows.getOutputColumns().orElseThrow());
+            List<OutputColumn> unsupported = encoderFactory.unsupported(outputColumns);
+            if (!unsupported.isEmpty()) {
+                TrinoException e = new TrinoException(SERIALIZATION_ERROR, "Output columns '%s' are not supported for spooling encoding '%s'".formatted(unsupported, encoderFactory.encoding()));
+                throwableConsumer.accept(e);
+                throw e;
+            }
+
+            builder = EncodedQueryData.builder(encoderFactory.encoding());
+            encoder = encoderFactory.create(session, outputColumns);
             builder.withAttributes(encoder.attributes());
         }
+        else {
+            builder = EncodedQueryData.builder(encoder.encoding());
+        }
 
-        List<OutputColumn> outputColumns = rows.getOutputColumns().orElseThrow();
-
+        UriBuilder uriBuilder = spooledSegmentUriBuilder(uriInfo);
         try {
             for (Page page : rows.getPages()) {
                 if (hasSpoolingMetadata(page, outputColumns.size())) {
-                    SpooledBlock metadata = SpooledBlock.deserialize(page);
+                    SpooledSegmentBlock metadata = SpooledSegmentBlock.deserialize(page);
                     DataAttributes attributes = metadata.attributes().toBuilder()
                             .set(ROW_OFFSET, currentOffset)
                             .build();
@@ -122,6 +134,6 @@ public class SpooledQueryDataProducer
 
     public static QueryDataProducer createSpooledQueryDataProducer(QueryDataEncoder.Factory encoder)
     {
-        return new SpooledQueryDataProducer(encoder);
+        return new SpoolingQueryDataProducer(encoder);
     }
 }

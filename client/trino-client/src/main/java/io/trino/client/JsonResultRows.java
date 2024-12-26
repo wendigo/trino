@@ -27,6 +27,7 @@ import java.io.IOException;
 import java.io.InputStream;
 import java.io.UncheckedIOException;
 import java.util.ArrayList;
+import java.util.Iterator;
 import java.util.List;
 
 import static com.fasterxml.jackson.core.JsonParser.Feature.AUTO_CLOSE_SOURCE;
@@ -138,24 +139,42 @@ public final class JsonResultRows
 
     public static ResultRows forJsonParser(JsonParser parser, List<Column> columns)
     {
-        return () -> {
-            try {
-                return new RowWiseIterator(parser, createTypeDecoders(columns));
+        return new ResultRows() {
+            @Override
+            public void close()
+            {
             }
-            catch (IOException e) {
-                throw new UncheckedIOException(e);
+
+            @Override
+            public Iterator<List<Object>> iterator()
+            {
+                try {
+                    return new RowWiseIterator(parser, createTypeDecoders(columns));
+                }
+                catch (IOException e) {
+                    throw new UncheckedIOException(e);
+                }
             }
         };
     }
 
     public static ResultRows forInputStream(InputStream stream, TypeDecoder[] decoders)
     {
-        return () -> {
-            try {
-                return new RowWiseIterator(stream, decoders);
+        return new ResultRows() {
+            @Override
+            public void close()
+            {
             }
-            catch (IOException e) {
-                throw new UncheckedIOException(e);
+
+            @Override
+            public Iterator<List<Object>> iterator()
+            {
+                try {
+                    return new RowWiseIterator(stream, decoders);
+                }
+                catch (IOException e) {
+                    throw new UncheckedIOException(e);
+                }
             }
         };
     }
