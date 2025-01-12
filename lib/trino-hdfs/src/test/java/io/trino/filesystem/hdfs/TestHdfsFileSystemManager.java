@@ -14,6 +14,7 @@
 package io.trino.filesystem.hdfs;
 
 import com.google.common.collect.ImmutableMap;
+import io.airlift.configuration.ConfigPropertyMetadata;
 import io.opentelemetry.api.OpenTelemetry;
 import io.trino.filesystem.Location;
 import io.trino.filesystem.TrinoFileSystem;
@@ -26,6 +27,7 @@ import java.io.IOException;
 import java.util.Set;
 import java.util.UUID;
 
+import static com.google.common.collect.ImmutableSet.toImmutableSet;
 import static org.assertj.core.api.Assertions.assertThat;
 
 class TestHdfsFileSystemManager
@@ -47,8 +49,7 @@ class TestHdfsFileSystemManager
                 new TestingNodeManager(),
                 OpenTelemetry.noop());
 
-        Set<String> used = manager.configure();
-        assertThat(used).containsExactly("hive.dfs.verify-checksum", "hive.s3.region");
+        assertThat(manager.configure().keySet()).containsExactly("hive.dfs.verify-checksum", "hive.s3.region");
 
         TrinoFileSystemFactory factory = manager.create();
         TrinoFileSystem fileSystem = factory.create(ConnectorIdentity.ofUser("test"));
