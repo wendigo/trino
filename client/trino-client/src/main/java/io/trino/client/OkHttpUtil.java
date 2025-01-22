@@ -26,7 +26,7 @@ import okhttp3.Credentials;
 import okhttp3.Interceptor;
 import okhttp3.JavaNetCookieJar;
 import okhttp3.OkHttpClient;
-import okhttp3.internal.tls.LegacyHostnameVerifier;
+import io.trino.client.tls.LegacyHostnameVerifier;
 import okhttp3.logging.HttpLoggingInterceptor;
 import okhttp3.logging.HttpLoggingInterceptor.Level;
 import org.ietf.jgss.GSSCredential;
