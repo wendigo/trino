@@ -13,7 +13,7 @@
  */
 package io.trino.jdbc;
 
-import io.trino.client.uri.HttpClientFactory;
+import io.trino.client.http.HttpClientFactory;
 import okhttp3.Call;
 import okhttp3.ConnectionPool;
 import okhttp3.Dispatcher;

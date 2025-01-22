@@ -11,7 +11,7 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package io.trino.client.uri;
+package io.trino.client.http;
 
 import io.trino.client.ClientException;
 import io.trino.client.DnsResolver;
@@ -20,6 +20,9 @@ import io.trino.client.auth.external.ExternalAuthenticator;
 import io.trino.client.auth.external.HttpTokenPoller;
 import io.trino.client.auth.external.RedirectHandler;
 import io.trino.client.auth.external.TokenPoller;
+import io.trino.client.uri.KnownTokenCache;
+import io.trino.client.uri.SslVerificationMode;
+import io.trino.client.uri.TrinoUri;
 import okhttp3.OkHttpClient;
 
 import java.io.File;
@@ -28,21 +31,21 @@ import java.util.Optional;
 import java.util.concurrent.TimeUnit;
 
 import static io.trino.client.KerberosUtil.defaultCredentialCachePath;
-import static io.trino.client.OkHttpUtil.basicAuth;
-import static io.trino.client.OkHttpUtil.setupAlternateHostnameVerification;
-import static io.trino.client.OkHttpUtil.setupCookieJar;
-import static io.trino.client.OkHttpUtil.setupHttpLogging;
-import static io.trino.client.OkHttpUtil.setupHttpProxy;
-import static io.trino.client.OkHttpUtil.setupInsecureSsl;
-import static io.trino.client.OkHttpUtil.setupKerberos;
-import static io.trino.client.OkHttpUtil.setupSocksProxy;
-import static io.trino.client.OkHttpUtil.setupSsl;
-import static io.trino.client.OkHttpUtil.setupTimeouts;
-import static io.trino.client.OkHttpUtil.tokenAuth;
-import static io.trino.client.OkHttpUtil.userAgent;
-import static io.trino.client.uri.ConnectionProperties.SslVerificationMode.CA;
-import static io.trino.client.uri.ConnectionProperties.SslVerificationMode.FULL;
-import static io.trino.client.uri.ConnectionProperties.SslVerificationMode.NONE;
+import static io.trino.client.http.OkHttpUtil.basicAuth;
+import static io.trino.client.http.OkHttpUtil.setupAlternateHostnameVerification;
+import static io.trino.client.http.OkHttpUtil.setupCookieJar;
+import static io.trino.client.http.OkHttpUtil.setupHttpLogging;
+import static io.trino.client.http.OkHttpUtil.setupHttpProxy;
+import static io.trino.client.http.OkHttpUtil.setupInsecureSsl;
+import static io.trino.client.http.OkHttpUtil.setupKerberos;
+import static io.trino.client.http.OkHttpUtil.setupSocksProxy;
+import static io.trino.client.http.OkHttpUtil.setupSsl;
+import static io.trino.client.http.OkHttpUtil.setupTimeouts;
+import static io.trino.client.http.OkHttpUtil.tokenAuth;
+import static io.trino.client.http.OkHttpUtil.userAgent;
+import static io.trino.client.uri.SslVerificationMode.CA;
+import static io.trino.client.uri.SslVerificationMode.FULL;
+import static io.trino.client.uri.SslVerificationMode.NONE;
 import static java.lang.Math.toIntExact;
 
 public class HttpClientFactory
@@ -126,7 +129,7 @@ public class HttpClientFactory
         setupHttpLogging(builder, uri.getHttpLoggingLevel());
 
         if (uri.isUseSecureConnection()) {
-            ConnectionProperties.SslVerificationMode sslVerificationMode = uri.getSslVerification();
+            SslVerificationMode sslVerificationMode = uri.getSslVerification();
             if (sslVerificationMode.equals(FULL) || sslVerificationMode.equals(CA)) {
                 setupSsl(
                         builder,

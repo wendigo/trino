@@ -13,24 +13,7 @@
  */
 package io.trino.client.uri;
 
-import io.trino.client.auth.external.KnownToken;
-
-public enum KnownTokenCache
+public enum SslVerificationMode
 {
-    NONE {
-        @Override
-        public KnownToken create()
-        {
-            return KnownToken.local();
-        }
-    },
-    MEMORY {
-        @Override
-        public KnownToken create()
-        {
-            return KnownToken.memoryCached();
-        }
-    };
-
-    public abstract KnownToken create();
+    FULL, CA, NONE
 }

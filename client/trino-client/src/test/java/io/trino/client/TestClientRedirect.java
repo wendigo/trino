@@ -37,7 +37,7 @@ import static com.google.common.net.HttpHeaders.CONTENT_TYPE;
 import static com.google.common.net.HttpHeaders.LOCATION;
 import static io.airlift.json.JsonCodec.jsonCodec;
 import static io.trino.client.StatementClientFactory.newStatementClient;
-import static io.trino.client.uri.HttpClientFactory.toHttpClientBuilder;
+import static io.trino.client.http.HttpClientFactory.toHttpClientBuilder;
 import static io.trino.spi.type.StandardTypes.INTEGER;
 import static io.trino.spi.type.StandardTypes.VARCHAR;
 import static java.util.stream.Collectors.toList;

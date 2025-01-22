@@ -15,7 +15,7 @@ package io.trino.cli;
 
 import io.trino.client.ClientSession;
 import io.trino.client.StatementClient;
-import io.trino.client.uri.HttpClientFactory;
+import io.trino.client.http.HttpClientFactory;
 import io.trino.client.uri.TrinoUri;
 import okhttp3.OkHttpClient;
 

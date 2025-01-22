@@ -16,7 +16,7 @@ package io.trino.testing;
 import com.google.common.collect.ImmutableMap;
 import com.google.inject.Key;
 import io.trino.Session;
-import io.trino.client.OkHttpUtil;
+import io.trino.client.http.OkHttpUtil;
 import io.trino.execution.QueryIdGenerator;
 import io.trino.metadata.SessionPropertyManager;
 import io.trino.server.security.PasswordAuthenticatorManager;

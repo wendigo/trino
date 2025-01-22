@@ -14,6 +14,7 @@
 package io.trino.client;
 
 import com.google.common.collect.Iterables;
+import io.trino.client.http.OkHttpSegmentLoader;
 import io.trino.client.spooling.DataAttributes;
 import io.trino.client.spooling.EncodedQueryData;
 import io.trino.client.spooling.InlineSegment;

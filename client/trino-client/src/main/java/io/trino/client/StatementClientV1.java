@@ -21,6 +21,7 @@ import com.google.common.collect.ImmutableSet;
 import com.google.common.collect.Sets;
 import com.google.errorprone.annotations.ThreadSafe;
 import io.airlift.units.Duration;
+import io.trino.client.http.OkHttpSegmentLoader;
 import jakarta.annotation.Nullable;
 import okhttp3.Call;
 import okhttp3.Headers;

@@ -24,9 +24,6 @@ import java.util.Properties;
 import java.util.Set;
 
 import static com.google.common.collect.ImmutableSet.toImmutableSet;
-import static io.trino.client.uri.ConnectionProperties.SslVerificationMode.CA;
-import static io.trino.client.uri.ConnectionProperties.SslVerificationMode.FULL;
-import static io.trino.client.uri.ConnectionProperties.SslVerificationMode.NONE;
 import static io.trino.client.uri.PropertyName.CLIENT_TAGS;
 import static io.trino.client.uri.PropertyName.DISABLE_COMPRESSION;
 import static io.trino.client.uri.PropertyName.EXTRA_CREDENTIALS;
@@ -39,6 +36,9 @@ import static io.trino.client.uri.PropertyName.SSL_TRUST_STORE_TYPE;
 import static io.trino.client.uri.PropertyName.SSL_USE_SYSTEM_KEY_STORE;
 import static io.trino.client.uri.PropertyName.SSL_USE_SYSTEM_TRUST_STORE;
 import static io.trino.client.uri.PropertyName.SSL_VERIFICATION;
+import static io.trino.client.uri.SslVerificationMode.CA;
+import static io.trino.client.uri.SslVerificationMode.FULL;
+import static io.trino.client.uri.SslVerificationMode.NONE;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 

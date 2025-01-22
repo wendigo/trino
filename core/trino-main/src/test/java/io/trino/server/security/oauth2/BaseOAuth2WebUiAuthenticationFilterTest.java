@@ -60,7 +60,7 @@ import java.util.Optional;
 import java.util.UUID;
 
 import static io.airlift.testing.Closeables.closeAll;
-import static io.trino.client.OkHttpUtil.setupInsecureSsl;
+import static io.trino.client.http.OkHttpUtil.setupInsecureSsl;
 import static io.trino.server.security.jwt.JwtUtil.newJwtBuilder;
 import static io.trino.server.security.jwt.JwtUtil.newJwtParserBuilder;
 import static io.trino.server.security.oauth2.TokenEndpointAuthMethod.CLIENT_SECRET_BASIC;

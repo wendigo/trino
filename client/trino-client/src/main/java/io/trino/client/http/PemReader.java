@@ -11,7 +11,7 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package io.trino.client;
+package io.trino.client.http;
 
 import com.google.common.collect.ImmutableSet;
 
@@ -50,11 +50,11 @@ import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
 import static com.google.common.io.Files.asCharSource;
-import static io.trino.client.DerUtils.decodeSequence;
-import static io.trino.client.DerUtils.decodeSequenceOptionalElement;
-import static io.trino.client.DerUtils.encodeOctetString;
-import static io.trino.client.DerUtils.encodeOid;
-import static io.trino.client.DerUtils.encodeSequence;
+import static io.trino.client.http.DerUtils.decodeSequence;
+import static io.trino.client.http.DerUtils.decodeSequenceOptionalElement;
+import static io.trino.client.http.DerUtils.encodeOctetString;
+import static io.trino.client.http.DerUtils.encodeOid;
+import static io.trino.client.http.DerUtils.encodeSequence;
 import static java.lang.String.format;
 import static java.nio.charset.StandardCharsets.US_ASCII;
 import static java.util.Base64.getMimeDecoder;

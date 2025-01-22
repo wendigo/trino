@@ -78,7 +78,7 @@ public class TestTrinoUriBuilder
     @Test
     public void testSetSimpleDependentValues()
     {
-        assertRoundTrip(SSL_VERIFICATION, ConnectionProperties.SslVerificationMode.CA, "CA", "https://localhost:443?SSL=true");
+        assertRoundTrip(SSL_VERIFICATION, SslVerificationMode.CA, "CA", "https://localhost:443?SSL=true");
         assertRoundTrip(SSL_KEY_STORE_TYPE, "jks", "jks", "https://localhost:443?SSLKeyStorePath=/tmp/file&SSLVerification=CA&SSL=true");
         assertRoundTrip(SSL_KEY_STORE_PASSWORD, "password", "password", "https://localhost:443?SSLKeyStorePath=/tmp/file&SSLVerification=CA&SSL=true");
         assertRoundTrip(SSL_KEY_STORE_PATH, "/tmp/path", "/tmp/path", "https://localhost:443?SSLVerification=CA&SSL=true");

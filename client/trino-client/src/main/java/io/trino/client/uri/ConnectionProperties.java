@@ -46,7 +46,7 @@ import static io.trino.client.ClientSelectedRole.Type.ALL;
 import static io.trino.client.ClientSelectedRole.Type.NONE;
 import static io.trino.client.uri.AbstractConnectionProperty.Validator;
 import static io.trino.client.uri.AbstractConnectionProperty.validator;
-import static io.trino.client.uri.ConnectionProperties.SslVerificationMode.FULL;
+import static io.trino.client.uri.SslVerificationMode.FULL;
 import static java.lang.String.format;
 import static java.util.Collections.singletonList;
 import static java.util.Collections.unmodifiableMap;
@@ -56,11 +56,6 @@ import static java.util.stream.Collectors.toMap;
 
 final class ConnectionProperties
 {
-    enum SslVerificationMode
-    {
-        FULL, CA, NONE
-    }
-
     public static final ConnectionProperty<String, String> USER = new User();
     public static final ConnectionProperty<String, String> PASSWORD = new Password();
     public static final ConnectionProperty<String, String> SESSION_USER = new SessionUser();

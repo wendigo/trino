@@ -11,7 +11,7 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package io.trino.client;
+package io.trino.client.http;
 
 import io.trino.client.spooling.SegmentLoader;
 import io.trino.client.spooling.SpooledSegment;
