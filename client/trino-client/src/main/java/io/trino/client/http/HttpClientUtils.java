@@ -68,7 +68,7 @@ import static java.nio.file.Files.newInputStream;
 import static java.util.Collections.list;
 import static java.util.Objects.requireNonNull;
 
-public final class OkHttpUtil
+public final class HttpClientUtils
 {
     // Mac KeyStore. See JDK documentation for Apple Provider.
     private static final String KEYSTORE_MACOS = "KeychainStore";
@@ -77,7 +77,7 @@ public final class OkHttpUtil
     private static final String KEYSTORE_WINDOWS_MY = "Windows-MY-CURRENTUSER";
     private static final String KEYSTORE_WINDOWS_ROOT = "Windows-ROOT-CURRENTUSER";
 
-    private OkHttpUtil() {}
+    private HttpClientUtils() {}
 
     public static Interceptor userAgent(String userAgent)
     {
@@ -135,7 +135,7 @@ public final class OkHttpUtil
 
     public static void setupProxy(OkHttpClient.Builder clientBuilder, Optional<HostAndPort> proxy, Proxy.Type type)
     {
-        proxy.map(OkHttpUtil::toUnresolvedAddress)
+        proxy.map(HttpClientUtils::toUnresolvedAddress)
                 .map(address -> new Proxy(type, address))
                 .ifPresent(clientBuilder::proxy);
     }

@@ -61,7 +61,7 @@ import java.time.Duration;
 import java.util.List;
 
 import static com.google.common.base.Preconditions.checkState;
-import static io.trino.client.http.OkHttpUtil.setupInsecureSsl;
+import static io.trino.client.http.HttpClientUtils.setupInsecureSsl;
 import static io.trino.server.security.oauth2.TokenEndpointAuthMethod.CLIENT_SECRET_BASIC;
 import static jakarta.servlet.http.HttpServletResponse.SC_NOT_FOUND;
 import static jakarta.servlet.http.HttpServletResponse.SC_OK;

@@ -98,7 +98,7 @@ import static io.airlift.http.client.HttpUriBuilder.uriBuilderFrom;
 import static io.airlift.jaxrs.JaxrsBinder.jaxrsBinder;
 import static io.jsonwebtoken.Claims.SUBJECT;
 import static io.jsonwebtoken.security.Keys.hmacShaKeyFor;
-import static io.trino.client.http.OkHttpUtil.setupSsl;
+import static io.trino.client.http.HttpClientUtils.setupSsl;
 import static io.trino.metadata.TestMetadataManager.createTestMetadataManager;
 import static io.trino.server.ServletSecurityUtils.authenticatedIdentity;
 import static io.trino.server.security.ResourceSecurity.AccessType.WEB_UI;

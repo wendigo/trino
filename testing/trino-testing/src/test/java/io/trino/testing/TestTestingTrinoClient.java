@@ -16,7 +16,7 @@ package io.trino.testing;
 import com.google.common.collect.ImmutableMap;
 import com.google.inject.Key;
 import io.trino.Session;
-import io.trino.client.http.OkHttpUtil;
+import io.trino.client.http.HttpClientUtils;
 import io.trino.execution.QueryIdGenerator;
 import io.trino.metadata.SessionPropertyManager;
 import io.trino.server.security.PasswordAuthenticatorManager;
@@ -94,7 +94,7 @@ public class TestTestingTrinoClient
     public void testAuthenticationWithForwarding()
     {
         OkHttpClient httpClient = new OkHttpClient.Builder()
-                .addInterceptor(OkHttpUtil.basicAuth(TEST_USER, PASSWORD))
+                .addInterceptor(HttpClientUtils.basicAuth(TEST_USER, PASSWORD))
                 .addInterceptor(httpsForwarded())
                 .build();
 
@@ -108,7 +108,7 @@ public class TestTestingTrinoClient
     public void testAuthenticationWithoutForwarding()
     {
         OkHttpClient httpClient = new OkHttpClient.Builder()
-                .addInterceptor(OkHttpUtil.basicAuth(TEST_USER, PASSWORD))
+                .addInterceptor(HttpClientUtils.basicAuth(TEST_USER, PASSWORD))
                 .build();
 
         try (TestingTrinoClient client = new TestingTrinoClient(server, session, httpClient)) {
