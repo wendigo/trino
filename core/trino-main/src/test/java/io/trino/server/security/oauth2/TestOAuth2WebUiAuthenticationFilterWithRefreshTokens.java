@@ -43,7 +43,7 @@ import java.net.URI;
 import java.time.Duration;
 
 import static io.airlift.testing.Closeables.closeAll;
-import static io.trino.client.http.HttpClientUtils.setupInsecureSsl;
+import static io.trino.client.http.HttpClientFactory.setupInsecureSsl;
 import static io.trino.server.security.jwt.JwtUtil.newJwtParserBuilder;
 import static io.trino.server.security.oauth2.TokenEndpointAuthMethod.CLIENT_SECRET_BASIC;
 import static io.trino.server.ui.OAuthIdTokenCookie.ID_TOKEN_COOKIE;
