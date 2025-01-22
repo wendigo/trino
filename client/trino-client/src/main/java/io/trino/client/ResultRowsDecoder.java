@@ -14,7 +14,7 @@
 package io.trino.client;
 
 import com.google.common.collect.Iterables;
-import io.trino.client.http.OkHttpSegmentLoader;
+import io.trino.client.http.HttpClientSegmentLoader;
 import io.trino.client.spooling.DataAttributes;
 import io.trino.client.spooling.EncodedQueryData;
 import io.trino.client.spooling.InlineSegment;
@@ -50,7 +50,7 @@ public class ResultRowsDecoder
 
     public ResultRowsDecoder()
     {
-        this(new OkHttpSegmentLoader());
+        this(new HttpClientSegmentLoader());
     }
 
     public ResultRowsDecoder(SegmentLoader loader)

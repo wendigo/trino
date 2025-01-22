@@ -33,19 +33,19 @@ import java.util.logging.Logger;
 import static java.lang.String.format;
 import static java.util.Objects.requireNonNull;
 
-public class OkHttpSegmentLoader
+public class HttpClientSegmentLoader
         implements SegmentLoader
 {
     private static final Logger logger = Logger.getLogger(SegmentLoader.class.getPackage().getName());
 
     private final Call.Factory callFactory;
 
-    public OkHttpSegmentLoader()
+    public HttpClientSegmentLoader()
     {
         this(new OkHttpClient());
     }
 
-    public OkHttpSegmentLoader(Call.Factory callFactory)
+    public HttpClientSegmentLoader(Call.Factory callFactory)
     {
         this.callFactory = requireNonNull(callFactory, "callFactory is null");
     }

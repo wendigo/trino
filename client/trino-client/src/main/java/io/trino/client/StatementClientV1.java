@@ -21,7 +21,7 @@ import com.google.common.collect.ImmutableSet;
 import com.google.common.collect.Sets;
 import com.google.errorprone.annotations.ThreadSafe;
 import io.airlift.units.Duration;
-import io.trino.client.http.OkHttpSegmentLoader;
+import io.trino.client.http.HttpClientSegmentLoader;
 import jakarta.annotation.Nullable;
 import okhttp3.Call;
 import okhttp3.Headers;
@@ -131,7 +131,7 @@ class StatementClientV1
                 .collect(toImmutableSet())));
         this.compressionDisabled = session.isCompressionDisabled();
 
-        this.resultRowsDecoder = new ResultRowsDecoder(new OkHttpSegmentLoader(requireNonNull(segmentHttpCallFactory, "segmentHttpCallFactory is null")));
+        this.resultRowsDecoder = new ResultRowsDecoder(new HttpClientSegmentLoader(requireNonNull(segmentHttpCallFactory, "segmentHttpCallFactory is null")));
 
         Request request = buildQueryRequest(session, query, session.getEncoding());
         // Pass empty as materializedJsonSizeLimit to always materialize the first response
