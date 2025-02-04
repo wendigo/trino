@@ -6611,6 +6611,22 @@ public class TestSqlParser
     }
 
     @Test
+    public void testInvalidQueryScoped()
+    {
+        assertStatementIsInvalid("WITH WITH SESSION query_max_memory = '1GB' SELECT 1")
+                .withMessage("line 1:6: mismatched input 'WITH'. Expecting: 'FUNCTION', 'RECURSIVE', 'SESSION', <identifier>");
+
+        assertStatementIsInvalid("WITH FUNCTION abc() RETURNS int RETURN 42, SESSION query_max_memory = '1GB' SELECT 1")
+            .withMessage("line 1:44: mismatched input 'SESSION'. Expecting: 'FUNCTION'");
+
+        assertStatementIsInvalid("WITH SESSION query_max_memory = '1GB', FUNCTION abc() RETURNS int RETURN 42, SESSION query_max_total_memory = '1GB' SELECT 1")
+                .withMessage("line 1:49: mismatched input 'abc'. Expecting: '.', '='");
+
+        assertStatementIsInvalid("WITH SESSION query_max_memory = '1GB', WITH SESSION query_max_total_memory = '1GB' SELECT 1")
+                .withMessage("line 1:40: mismatched input 'WITH'. Expecting: <identifier>");
+    }
+
+    @Test
     public void testWithSessionAndFunction()
     {
         assertThat( statement("""
