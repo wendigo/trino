@@ -204,10 +204,9 @@ rootQuery
     ;
 
 queryScoped
-    : WITH (
-          (SESSION sessionProperty (',' sessionProperty)*)
-        | (functionSpecification (',' functionSpecification)*)
-        | (SESSION sessionProperty (',' sessionProperty)* functionSpecification (',' functionSpecification)*))
+    :   (WITH SESSION sessionProperty (',' sessionProperty)*)
+      | (WITH functionSpecification (',' functionSpecification)*)
+      | (WITH SESSION sessionProperty (',' sessionProperty)* functionSpecification (',' functionSpecification)*)
     ;
 
 sessionProperty
