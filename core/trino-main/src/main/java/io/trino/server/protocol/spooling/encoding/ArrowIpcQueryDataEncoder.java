@@ -50,24 +50,28 @@ public class ArrowIpcQueryDataEncoder
 
     private final List<Field> fields;
     private final BufferAllocator allocator;
-    private final List<OutputColumn> columns;
+    //private final List<OutputColumn> columns;
+    private final VectorSchemaRoot schema;
+    private final List<ArrowOutputColumn> arrowOutputColumns;
 
     public ArrowIpcQueryDataEncoder(BufferAllocator allocator, List<OutputColumn> columns)
     {
         this.allocator = requireNonNull(allocator, "allocator is null");
-        this.columns = columns;
         this.fields = columns.stream()
                 .map(column -> createArrowField(column.columnName(), column.type()))
                 .collect(toImmutableList());
+
+        this.schema = VectorSchemaRoot.create(new Schema(fields), requireNonNull(allocator, "allocator is null"));
+        this.arrowOutputColumns = buildArrowOutputColumns(columns, fields, schema);
     }
 
     @Override
     public DataAttributes encodeTo(OutputStream output, List<Page> pages)
             throws IOException
     {
-        VectorSchemaRoot schema = VectorSchemaRoot.create(new Schema(fields), requireNonNull(allocator, "allocator is null"));
+
         try (CountingOutputStream wrapper = new CountingOutputStream(output); ArrowStreamWriter writer = new ArrowStreamWriter(schema, null, Channels.newChannel(wrapper))) {
-            try (ArrowWriter arrowWriter = new ArrowWriter(schema, buildArrowOutputColumns(columns, fields, schema))) {
+            try (ArrowWriter arrowWriter = new ArrowWriter(schema, arrowOutputColumns)) {
                 for (Page page : pages) {
                     arrowWriter.write(writer, page);
                 }
