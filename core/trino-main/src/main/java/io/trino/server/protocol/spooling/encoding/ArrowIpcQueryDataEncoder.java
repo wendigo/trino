@@ -49,14 +49,11 @@ public class ArrowIpcQueryDataEncoder
     private static final String ENCODING = "arrow";
 
     private final List<Field> fields;
-    private final BufferAllocator allocator;
-    //private final List<OutputColumn> columns;
     private final VectorSchemaRoot schema;
     private final List<ArrowOutputColumn> arrowOutputColumns;
 
     public ArrowIpcQueryDataEncoder(BufferAllocator allocator, List<OutputColumn> columns)
     {
-        this.allocator = requireNonNull(allocator, "allocator is null");
         this.fields = columns.stream()
                 .map(column -> createArrowField(column.columnName(), column.type()))
                 .collect(toImmutableList());
@@ -69,7 +66,6 @@ public class ArrowIpcQueryDataEncoder
     public DataAttributes encodeTo(OutputStream output, List<Page> pages)
             throws IOException
     {
-
         try (CountingOutputStream wrapper = new CountingOutputStream(output); ArrowStreamWriter writer = new ArrowStreamWriter(schema, null, Channels.newChannel(wrapper))) {
             try (ArrowWriter arrowWriter = new ArrowWriter(schema, arrowOutputColumns)) {
                 for (Page page : pages) {

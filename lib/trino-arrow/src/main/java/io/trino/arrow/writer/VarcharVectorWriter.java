@@ -13,6 +13,7 @@
  */
 package io.trino.arrow.writer;
 
+import io.airlift.slice.Slice;
 import io.trino.spi.block.Block;
 import org.apache.arrow.vector.VarCharVector;
 
@@ -35,6 +36,7 @@ public final class VarcharVectorWriter
     @Override
     protected void writeValue(Block block, int position)
     {
-        vector.setSafe(position, VARCHAR.getSlice(block, position).getBytes());
+        Slice slice = VARCHAR.getSlice(block, position);
+        vector.setSafe(position, slice.byteArray(), slice.byteArrayOffset(), slice.length());
     }
 }
