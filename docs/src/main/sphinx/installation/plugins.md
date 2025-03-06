@@ -289,6 +289,9 @@ with the listed coordinates.
 * - spooling-filesystem
   - Server side support for [](protocol-spooling)
   - [io.trino:spooling-filesystem](https://central.sonatype.com/search?q=io.trino%3Atrino-spooling-filesystem)
+* - spooling-local
+  - Local server side support for [](protocol-spooling)
+  - [io.trino:spooling-filesystem](https://central.sonatype.com/search?q=io.trino%3Atrino-spooling-local)
 * - sqlserver
   - [](/connector/sqlserver)
   - [io.trino:sqlserver](https://central.sonatype.com/search?q=io.trino%3Atrino-sqlserver)

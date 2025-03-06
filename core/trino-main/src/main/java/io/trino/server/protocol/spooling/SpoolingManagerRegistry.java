@@ -19,7 +19,9 @@ import com.google.inject.spi.Message;
 import io.airlift.log.Logger;
 import io.opentelemetry.api.OpenTelemetry;
 import io.opentelemetry.api.trace.Tracer;
+import io.trino.metadata.InternalNodeManager;
 import io.trino.server.ServerConfig;
+import io.trino.spi.Node;
 import io.trino.spi.classloader.ThreadContextClassLoader;
 import io.trino.spi.spool.SpoolingManager;
 import io.trino.spi.spool.SpoolingManagerContext;
@@ -51,16 +53,16 @@ public class SpoolingManagerRegistry
     private static final String SPOOLING_MANAGER_NAME_PROPERTY = "spooling-manager.name";
 
     private final boolean enabled;
-    private final boolean coordinator;
+    private final Node currentNode;
     private final OpenTelemetry openTelemetry;
     private final Tracer tracer;
     private volatile SpoolingManager spoolingManager;
 
     @Inject
-    public SpoolingManagerRegistry(ServerConfig serverConfig, SpoolingEnabledConfig config, OpenTelemetry openTelemetry, Tracer tracer)
+    public SpoolingManagerRegistry(InternalNodeManager nodeManager, SpoolingEnabledConfig config, OpenTelemetry openTelemetry, Tracer tracer)
     {
         this.enabled = config.isEnabled();
-        this.coordinator = serverConfig.isCoordinator();
+        this.currentNode = nodeManager.getCurrentNode();
         this.openTelemetry = requireNonNull(openTelemetry, "openTelemetry is null");
         this.tracer = requireNonNull(tracer, "tracer is null");
     }
@@ -122,9 +124,9 @@ public class SpoolingManagerRegistry
             }
 
             @Override
-            public boolean isCoordinator()
+            public Node getCurrentNode()
             {
-                return coordinator;
+                return currentNode;
             }
         };
 

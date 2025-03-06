@@ -75,4 +75,9 @@
         </artifact>
     </artifactSet>
 
+    <artifactSet to="plugin/spooling-local">
+        <artifact id="${project.groupId}:trino-spooling-local:zip:${project.version}">
+            <unpack />
+        </artifact>
+    </artifactSet>
 </runtime>
