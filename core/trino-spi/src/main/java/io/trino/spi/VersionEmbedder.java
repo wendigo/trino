@@ -20,6 +20,26 @@ import static java.util.Objects.requireNonNull;
 
 public interface VersionEmbedder
 {
+    VersionEmbedder NO_EMBEDDING = new VersionEmbedder() {
+        @Override
+        public Runnable embedVersion(Runnable runnable)
+        {
+            return runnable;
+        }
+
+        @Override
+        public <T> Callable<T> embedVersion(Callable<T> callable)
+        {
+            return callable;
+        }
+
+        @Override
+        public Executor embedVersion(Executor delegate)
+        {
+            return delegate;
+        }
+    };
+
     /**
      * Encodes Trino server version information in the stack
      */

@@ -27,6 +27,7 @@ public class ServerConfig
     private boolean coordinator = true;
     private boolean concurrentStartup;
     private boolean includeExceptionInResponse = true;
+    private boolean includeVersionInStacktrace = true;
     private Duration gracePeriod = new Duration(2, MINUTES);
     private boolean queryResultsCompressionEnabled = true;
     private Optional<String> queryInfoUrlTemplate = Optional.empty();
@@ -65,6 +66,18 @@ public class ServerConfig
     public ServerConfig setIncludeExceptionInResponse(boolean includeExceptionInResponse)
     {
         this.includeExceptionInResponse = includeExceptionInResponse;
+        return this;
+    }
+
+    public boolean isIncludeVersionInStacktrace()
+    {
+        return includeVersionInStacktrace;
+    }
+
+    @Config("version-in-stacktrace")
+    public ServerConfig setIncludeVersionInStacktrace(boolean includeVersionInStacktrace)
+    {
+        this.includeVersionInStacktrace = includeVersionInStacktrace;
         return this;
     }
 

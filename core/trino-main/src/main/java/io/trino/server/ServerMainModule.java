@@ -298,7 +298,13 @@ public class ServerMainModule
         configBinder(binder).bindConfig(NodeMemoryConfig.class);
         binder.bind(LocalMemoryManager.class).in(Scopes.SINGLETON);
         binder.bind(LocalMemoryManagerExporter.class).in(Scopes.SINGLETON);
-        newOptionalBinder(binder, VersionEmbedder.class).setDefault().to(EmbedVersion.class).in(Scopes.SINGLETON);
+
+        if (serverConfig.isIncludeVersionInStacktrace()) {
+            newOptionalBinder(binder, VersionEmbedder.class).setDefault().to(EmbedVersion.class).in(Scopes.SINGLETON);
+        }
+        else {
+            newOptionalBinder(binder, VersionEmbedder.class).setDefault().toInstance(EmbedVersion.NO_EMBEDDING);
+        }
         newExporter(binder).export(SqlTaskManager.class).withGeneratedName();
 
         binder.bind(MultilevelSplitQueue.class).in(Scopes.SINGLETON);
