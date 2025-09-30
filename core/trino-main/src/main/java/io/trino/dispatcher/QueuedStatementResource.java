@@ -111,7 +111,7 @@ public class QueuedStatementResource
 {
     private static final Logger log = Logger.get(QueuedStatementResource.class);
     private static final Duration MAX_WAIT_TIME = new Duration(1, SECONDS);
-    private static final Duration NO_DURATION = new Duration(0, MILLISECONDS);
+    private static final Duration NO_DURATION = Duration.ZERO;
 
     private final HttpRequestSessionContextFactory sessionContextFactory;
     private final DispatchManager dispatchManager;

@@ -28,7 +28,6 @@ import java.util.Set;
 
 import static com.google.common.base.Preconditions.checkArgument;
 import static java.util.Objects.requireNonNull;
-import static java.util.concurrent.TimeUnit.MILLISECONDS;
 
 @Immutable
 public class DriverStats
@@ -79,38 +78,38 @@ public class DriverStats
         this.createTime = Instant.now();
         this.startTime = null;
         this.endTime = null;
-        this.queuedTime = new Duration(0, MILLISECONDS);
-        this.elapsedTime = new Duration(0, MILLISECONDS);
+        this.queuedTime = Duration.ZERO;
+        this.elapsedTime = Duration.ZERO;
 
         this.userMemoryReservation = DataSize.ofBytes(0);
         this.revocableMemoryReservation = DataSize.ofBytes(0);
 
         this.spilledDataSize = DataSize.ofBytes(0);
 
-        this.totalScheduledTime = new Duration(0, MILLISECONDS);
-        this.totalCpuTime = new Duration(0, MILLISECONDS);
-        this.totalBlockedTime = new Duration(0, MILLISECONDS);
+        this.totalScheduledTime = Duration.ZERO;
+        this.totalCpuTime = Duration.ZERO;
+        this.totalBlockedTime = Duration.ZERO;
         this.fullyBlocked = false;
         this.blockedReasons = ImmutableSet.of();
 
         this.physicalInputDataSize = DataSize.ofBytes(0);
         this.physicalInputPositions = 0;
-        this.physicalInputReadTime = new Duration(0, MILLISECONDS);
+        this.physicalInputReadTime = Duration.ZERO;
 
         this.internalNetworkInputDataSize = DataSize.ofBytes(0);
         this.internalNetworkInputPositions = 0;
 
-        this.rawInputReadTime = new Duration(0, MILLISECONDS);
+        this.rawInputReadTime = Duration.ZERO;
 
         this.processedInputDataSize = DataSize.ofBytes(0);
         this.processedInputPositions = 0;
 
-        this.inputBlockedTime = new Duration(0, MILLISECONDS);
+        this.inputBlockedTime = Duration.ZERO;
 
         this.outputDataSize = DataSize.ofBytes(0);
         this.outputPositions = 0;
 
-        this.outputBlockedTime = new Duration(0, MILLISECONDS);
+        this.outputBlockedTime = Duration.ZERO;
 
         this.physicalWrittenDataSize = DataSize.ofBytes(0);
 

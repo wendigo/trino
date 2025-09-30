@@ -59,7 +59,6 @@ import static io.airlift.units.DataSize.Unit.BYTE;
 import static io.trino.execution.DynamicFiltersCollector.INITIAL_DYNAMIC_FILTERS_VERSION;
 import static io.trino.util.Failures.toFailures;
 import static java.util.Objects.requireNonNull;
-import static java.util.concurrent.TimeUnit.MILLISECONDS;
 
 public class TestingRemoteTaskFactory
         implements RemoteTaskFactory
@@ -190,7 +189,7 @@ public class TestingRemoteTaskFactory
                     DataSize.of(0, BYTE),
                     DataSize.of(0, BYTE),
                     0,
-                    new Duration(0, MILLISECONDS),
+                    Duration.ZERO,
                     INITIAL_DYNAMIC_FILTERS_VERSION,
                     0,
                     0);

@@ -268,7 +268,7 @@ public class SuiteRun
                         runId,
                         suiteTestRun,
                         environmentConfig,
-                        new Duration(0, MILLISECONDS),
+                        Duration.ZERO,
                         OptionalInt.empty(),
                         Optional.of(new Exception("Test execution not attempted because suite total running time limit was exhausted")));
             }

@@ -30,7 +30,6 @@ import java.util.Optional;
 
 import static io.trino.plugin.base.logging.FormatInterpolator.hasValidPlaceholders;
 import static java.util.concurrent.TimeUnit.HOURS;
-import static java.util.concurrent.TimeUnit.MILLISECONDS;
 import static java.util.concurrent.TimeUnit.MINUTES;
 
 @DefunctConfig("bigquery.parallelism")
@@ -53,10 +52,10 @@ public class BigQueryConfig
     private int maxReadRowsRetries = DEFAULT_MAX_READ_ROWS_RETRIES;
     private int metadataPageSize = 1000;
     private boolean caseInsensitiveNameMatching;
-    private Duration caseInsensitiveNameMatchingCacheTtl = new Duration(0, MILLISECONDS);
+    private Duration caseInsensitiveNameMatchingCacheTtl = Duration.ZERO;
     private Duration viewsCacheTtl = new Duration(15, MINUTES);
     private Duration serviceCacheTtl = new Duration(3, MINUTES);
-    private Duration metadataCacheTtl = new Duration(0, MILLISECONDS);
+    private Duration metadataCacheTtl = Duration.ZERO;
     @Deprecated
     private boolean isLegacyMetadataListing;
     private boolean queryResultsCacheEnabled;

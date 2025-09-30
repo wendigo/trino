@@ -158,7 +158,7 @@ public class HiveConfig
 
     private boolean projectionPushdownEnabled = true;
 
-    private Duration dynamicFilteringWaitTimeout = new Duration(0, MINUTES);
+    private Duration dynamicFilteringWaitTimeout = Duration.ZERO;
 
     private HiveTimestampPrecision timestampPrecision = HiveTimestampPrecision.DEFAULT_PRECISION;
 

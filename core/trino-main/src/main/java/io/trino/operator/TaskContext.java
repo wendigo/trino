@@ -57,7 +57,6 @@ import static io.airlift.units.DataSize.succinctBytes;
 import static java.lang.Math.max;
 import static java.lang.Math.toIntExact;
 import static java.util.Objects.requireNonNull;
-import static java.util.concurrent.TimeUnit.MILLISECONDS;
 import static java.util.concurrent.TimeUnit.NANOSECONDS;
 import static java.util.stream.Collectors.toList;
 
@@ -398,7 +397,7 @@ public class TaskContext
     {
         long startFullGcTimeNanos = this.startFullGcTimeNanos.get();
         if (startFullGcTimeNanos < 0) {
-            return new Duration(0, MILLISECONDS);
+            return Duration.ZERO;
         }
 
         long endFullGcTimeNanos = this.endFullGcTimeNanos.get();

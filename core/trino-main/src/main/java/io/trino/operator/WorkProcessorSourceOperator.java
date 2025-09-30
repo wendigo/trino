@@ -17,8 +17,6 @@ import io.airlift.units.DataSize;
 import io.airlift.units.Duration;
 import io.trino.spi.metrics.Metrics;
 
-import static java.util.concurrent.TimeUnit.NANOSECONDS;
-
 // TODO: support spill
 public interface WorkProcessorSourceOperator
         extends WorkProcessorOperator
@@ -55,7 +53,7 @@ public interface WorkProcessorSourceOperator
 
     default Duration getReadTime()
     {
-        return new Duration(0, NANOSECONDS);
+        return Duration.ZERO;
     }
 
     default long getDynamicFilterSplitsProcessed()

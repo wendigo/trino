@@ -42,7 +42,6 @@ import static io.trino.execution.DistributionSnapshot.pruneMetrics;
 import static io.trino.execution.StageState.RUNNING;
 import static java.lang.Math.min;
 import static java.util.Objects.requireNonNull;
-import static java.util.concurrent.TimeUnit.SECONDS;
 
 @Immutable
 public class StageStats
@@ -727,7 +726,6 @@ public class StageStats
     public static StageStats createInitial()
     {
         DataSize zeroBytes = DataSize.of(0, BYTE);
-        Duration zeroSeconds = new Duration(0, SECONDS);
         return new StageStats(
                 null,
                 ImmutableMap.of(),
@@ -749,19 +747,19 @@ public class StageStats
                 zeroBytes,
                 zeroBytes,
                 zeroBytes,
-                zeroSeconds,
-                zeroSeconds,
-                zeroSeconds,
-                zeroSeconds,
-                zeroSeconds,
+                Duration.ZERO,
+                Duration.ZERO,
+                Duration.ZERO,
+                Duration.ZERO,
+                Duration.ZERO,
                 false,
                 ImmutableSet.of(),
                 zeroBytes,
                 zeroBytes,
                 0,
                 0,
-                zeroSeconds,
-                zeroSeconds,
+                Duration.ZERO,
+                Duration.ZERO,
                 zeroBytes,
                 zeroBytes,
                 0,
@@ -770,8 +768,8 @@ public class StageStats
                 zeroBytes,
                 0,
                 0,
-                zeroSeconds,
-                zeroSeconds,
+                Duration.ZERO,
+                Duration.ZERO,
                 zeroBytes,
                 Optional.empty(),
                 zeroBytes,
@@ -779,8 +777,8 @@ public class StageStats
                 0,
                 0,
                 Metrics.EMPTY,
-                zeroSeconds,
-                zeroSeconds,
+                Duration.ZERO,
+                Duration.ZERO,
                 zeroBytes,
                 zeroBytes,
                 new StageGcStatistics(

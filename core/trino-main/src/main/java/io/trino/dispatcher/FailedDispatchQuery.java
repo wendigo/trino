@@ -42,7 +42,6 @@ import static com.google.common.util.concurrent.Futures.immediateVoidFuture;
 import static io.trino.server.DynamicFilterService.DynamicFiltersStats;
 import static io.trino.util.Failures.toFailure;
 import static java.util.Objects.requireNonNull;
-import static java.util.concurrent.TimeUnit.MILLISECONDS;
 
 public class FailedDispatchQuery
         implements DispatchQuery
@@ -195,7 +194,7 @@ public class FailedDispatchQuery
     @Override
     public Duration getTotalCpuTime()
     {
-        return new Duration(0, MILLISECONDS);
+        return Duration.ZERO;
     }
 
     @Override
@@ -269,16 +268,16 @@ public class FailedDispatchQuery
                 now,
                 now,
                 now,
-                new Duration(0, MILLISECONDS),
-                new Duration(0, MILLISECONDS),
-                new Duration(0, MILLISECONDS),
-                new Duration(0, MILLISECONDS),
-                new Duration(0, MILLISECONDS),
-                new Duration(0, MILLISECONDS),
-                new Duration(0, MILLISECONDS),
-                new Duration(0, MILLISECONDS),
-                new Duration(0, MILLISECONDS),
-                new Duration(0, MILLISECONDS),
+                Duration.ZERO,
+                Duration.ZERO,
+                Duration.ZERO,
+                Duration.ZERO,
+                Duration.ZERO,
+                Duration.ZERO,
+                Duration.ZERO,
+                Duration.ZERO,
+                Duration.ZERO,
+                Duration.ZERO,
                 0,
                 0,
                 0,
@@ -303,19 +302,19 @@ public class FailedDispatchQuery
                 false,
                 OptionalDouble.empty(),
                 OptionalDouble.empty(),
-                new Duration(0, MILLISECONDS),
-                new Duration(0, MILLISECONDS),
-                new Duration(0, MILLISECONDS),
-                new Duration(0, MILLISECONDS),
-                new Duration(0, MILLISECONDS),
+                Duration.ZERO,
+                Duration.ZERO,
+                Duration.ZERO,
+                Duration.ZERO,
+                Duration.ZERO,
                 false,
                 ImmutableSet.of(),
                 DataSize.ofBytes(0),
                 DataSize.ofBytes(0),
                 0,
                 0,
-                new Duration(0, MILLISECONDS),
-                new Duration(0, MILLISECONDS),
+                Duration.ZERO,
+                Duration.ZERO,
                 DataSize.ofBytes(0),
                 DataSize.ofBytes(0),
                 0,
@@ -324,14 +323,14 @@ public class FailedDispatchQuery
                 DataSize.ofBytes(0),
                 0,
                 0,
-                new Duration(0, MILLISECONDS),
-                new Duration(0, MILLISECONDS),
+                Duration.ZERO,
+                Duration.ZERO,
                 DataSize.ofBytes(0),
                 DataSize.ofBytes(0),
                 0,
                 0,
-                new Duration(0, MILLISECONDS),
-                new Duration(0, MILLISECONDS),
+                Duration.ZERO,
+                Duration.ZERO,
                 DataSize.ofBytes(0),
                 DataSize.ofBytes(0),
                 ImmutableList.of(),

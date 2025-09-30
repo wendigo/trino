@@ -78,7 +78,6 @@ import static io.trino.execution.TaskState.RUNNING;
 import static io.trino.util.Failures.toFailures;
 import static java.lang.String.format;
 import static java.util.Objects.requireNonNull;
-import static java.util.concurrent.TimeUnit.MILLISECONDS;
 
 public class SqlTask
 {
@@ -338,7 +337,7 @@ public class SqlTask
         DataSize peakUserMemoryReservation = DataSize.ofBytes(0);
         DataSize revocableMemoryReservation = DataSize.ofBytes(0);
         long fullGcCount = 0;
-        Duration fullGcTime = new Duration(0, MILLISECONDS);
+        Duration fullGcTime = Duration.ZERO;
         long dynamicFiltersVersion = INITIAL_DYNAMIC_FILTERS_VERSION;
         if (taskHolder.getFinalTaskInfo() != null) {
             TaskInfo taskInfo = taskHolder.getFinalTaskInfo();

@@ -43,7 +43,6 @@ import static com.google.common.collect.Iterables.getLast;
 import static io.airlift.units.DataSize.succinctBytes;
 import static java.lang.Math.max;
 import static java.util.Objects.requireNonNull;
-import static java.util.concurrent.TimeUnit.MILLISECONDS;
 import static java.util.concurrent.TimeUnit.NANOSECONDS;
 import static java.util.stream.Collectors.toList;
 
@@ -375,22 +374,22 @@ public class DriverContext
         else {
             physicalInputDataSize = DataSize.ofBytes(0);
             physicalInputPositions = 0;
-            physicalInputReadTime = new Duration(0, MILLISECONDS);
+            physicalInputReadTime = Duration.ZERO;
 
             internalNetworkInputDataSize = DataSize.ofBytes(0);
             internalNetworkInputPositions = 0;
 
-            rawInputReadTime = new Duration(0, MILLISECONDS);
+            rawInputReadTime = Duration.ZERO;
 
             processedInputDataSize = DataSize.ofBytes(0);
             processedInputPositions = 0;
 
-            inputBlockedTime = new Duration(0, MILLISECONDS);
+            inputBlockedTime = Duration.ZERO;
 
             outputDataSize = DataSize.ofBytes(0);
             outputPositions = 0;
 
-            outputBlockedTime = new Duration(0, MILLISECONDS);
+            outputBlockedTime = Duration.ZERO;
         }
 
         ImmutableSet.Builder<BlockedReason> builder = ImmutableSet.builder();

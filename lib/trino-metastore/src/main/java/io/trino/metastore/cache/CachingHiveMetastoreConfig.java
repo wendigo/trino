@@ -24,7 +24,6 @@ import java.util.Optional;
 import static com.google.common.base.MoreObjects.firstNonNull;
 import static com.google.common.collect.Comparators.max;
 import static java.util.concurrent.TimeUnit.MINUTES;
-import static java.util.concurrent.TimeUnit.SECONDS;
 
 public class CachingHiveMetastoreConfig
 {
@@ -34,7 +33,7 @@ public class CachingHiveMetastoreConfig
     // time window where table data can be altered is limited.
     public static final Duration DEFAULT_STATS_CACHE_TTL = new Duration(5, MINUTES);
 
-    private Duration metastoreCacheTtl = new Duration(0, SECONDS);
+    private Duration metastoreCacheTtl = Duration.ZERO;
     private Optional<Duration> statsCacheTtl = Optional.empty();
     private Optional<Duration> metastoreRefreshInterval = Optional.empty();
     private long metastoreCacheMaximumSize = 20000;

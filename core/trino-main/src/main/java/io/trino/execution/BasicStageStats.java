@@ -42,7 +42,7 @@ public class BasicStageStats
 
             DataSize.ofBytes(0),
             0,
-            new Duration(0, MILLISECONDS),
+            Duration.ZERO,
             DataSize.ofBytes(0),
 
             DataSize.ofBytes(0),
@@ -57,10 +57,10 @@ public class BasicStageStats
             DataSize.ofBytes(0),
             DataSize.ofBytes(0),
 
-            new Duration(0, MILLISECONDS),
-            new Duration(0, MILLISECONDS),
-            new Duration(0, MILLISECONDS),
-            new Duration(0, MILLISECONDS),
+            Duration.ZERO,
+            Duration.ZERO,
+            Duration.ZERO,
+            Duration.ZERO,
 
             false,
             ImmutableSet.of(),

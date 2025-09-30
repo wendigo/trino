@@ -91,7 +91,6 @@ import static io.trino.type.UnknownType.UNKNOWN;
 import static io.trino.util.Failures.toFailures;
 import static java.lang.Math.addExact;
 import static java.util.Objects.requireNonNull;
-import static java.util.concurrent.TimeUnit.MILLISECONDS;
 
 public class MockRemoteTaskFactory
         implements RemoteTaskFactory
@@ -301,7 +300,7 @@ public class MockRemoteTaskFactory
                     stats.getPeakUserMemoryReservation(),
                     stats.getRevocableMemoryReservation(),
                     0,
-                    new Duration(0, MILLISECONDS),
+                    Duration.ZERO,
                     INITIAL_DYNAMIC_FILTERS_VERSION,
                     queuedSplitsInfo.getWeightSum(),
                     combinedSplitsInfo.getWeightSum() - queuedSplitsInfo.getWeightSum());

@@ -28,7 +28,6 @@ import java.util.Set;
 
 import static com.google.common.base.Preconditions.checkArgument;
 import static java.util.Objects.requireNonNull;
-import static java.util.concurrent.TimeUnit.MILLISECONDS;
 
 /**
  * Lightweight version of QueryStats. Parts of the web UI depend on the fields
@@ -208,9 +207,9 @@ public class BasicQueryStats
         return new BasicQueryStats(
                 now,
                 now,
-                new Duration(0, MILLISECONDS),
-                new Duration(0, MILLISECONDS),
-                new Duration(0, MILLISECONDS),
+                Duration.ZERO,
+                Duration.ZERO,
+                Duration.ZERO,
                 0,
                 0,
                 0,
@@ -228,14 +227,14 @@ public class BasicQueryStats
                 DataSize.ofBytes(0),
                 DataSize.ofBytes(0),
                 DataSize.ofBytes(0),
-                new Duration(0, MILLISECONDS),
-                new Duration(0, MILLISECONDS),
-                new Duration(0, MILLISECONDS),
-                new Duration(0, MILLISECONDS),
-                new Duration(0, MILLISECONDS),
-                new Duration(0, MILLISECONDS),
-                new Duration(0, MILLISECONDS),
-                new Duration(0, MILLISECONDS),
+                Duration.ZERO,
+                Duration.ZERO,
+                Duration.ZERO,
+                Duration.ZERO,
+                Duration.ZERO,
+                Duration.ZERO,
+                Duration.ZERO,
+                Duration.ZERO,
                 false,
                 ImmutableSet.of(),
                 OptionalDouble.empty(),

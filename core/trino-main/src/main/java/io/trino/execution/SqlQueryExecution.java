@@ -104,7 +104,6 @@ import static io.trino.sql.planner.sanity.PlanSanityChecker.DISTRIBUTED_PLAN_SAN
 import static io.trino.tracing.ScopedSpan.scopedSpan;
 import static java.lang.Thread.currentThread;
 import static java.util.Objects.requireNonNull;
-import static java.util.concurrent.TimeUnit.SECONDS;
 
 @ThreadSafe
 public class SqlQueryExecution
@@ -374,7 +373,7 @@ public class SqlQueryExecution
             return finalQueryInfo.get().getQueryStats().getTotalCpuTime();
         }
         if (scheduler == null) {
-            return new Duration(0, SECONDS);
+            return Duration.ZERO;
         }
         return scheduler.getTotalCpuTime();
     }

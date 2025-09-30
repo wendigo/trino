@@ -18,11 +18,9 @@ import io.airlift.units.Duration;
 import jakarta.validation.constraints.Min;
 import jakarta.validation.constraints.NotNull;
 
-import java.util.concurrent.TimeUnit;
-
 public class ImpersonationCachingConfig
 {
-    private Duration userMetastoreCacheTtl = new Duration(0, TimeUnit.SECONDS);
+    private Duration userMetastoreCacheTtl = Duration.ZERO;
     private long userMetastoreCacheMaximumSize = 1000;
 
     @NotNull

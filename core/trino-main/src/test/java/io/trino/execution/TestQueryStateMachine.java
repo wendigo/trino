@@ -223,11 +223,11 @@ public class TestQueryStateMachine
 
         QueryStats queryStats = stateMachine.getQueryInfo(Optional.empty()).getQueryStats();
         assertThat(queryStats.getQueuedTime()).isEqualTo(new Duration(7, MILLISECONDS));
-        assertThat(queryStats.getResourceWaitingTime()).isEqualTo(new Duration(0, MILLISECONDS));
-        assertThat(queryStats.getDispatchingTime()).isEqualTo(new Duration(0, MILLISECONDS));
-        assertThat(queryStats.getPlanningTime()).isEqualTo(new Duration(0, MILLISECONDS));
-        assertThat(queryStats.getExecutionTime()).isEqualTo(new Duration(0, MILLISECONDS));
-        assertThat(queryStats.getFinishingTime()).isEqualTo(new Duration(0, MILLISECONDS));
+        assertThat(queryStats.getResourceWaitingTime()).isEqualTo(Duration.ZERO);
+        assertThat(queryStats.getDispatchingTime()).isEqualTo(Duration.ZERO);
+        assertThat(queryStats.getPlanningTime()).isEqualTo(Duration.ZERO);
+        assertThat(queryStats.getExecutionTime()).isEqualTo(Duration.ZERO);
+        assertThat(queryStats.getFinishingTime()).isEqualTo(Duration.ZERO);
     }
 
     @Test

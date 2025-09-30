@@ -26,7 +26,6 @@ import static io.airlift.configuration.testing.ConfigAssertions.recordDefaults;
 import static io.airlift.testing.ValidationAssertions.assertFailsValidation;
 import static java.util.concurrent.TimeUnit.DAYS;
 import static java.util.concurrent.TimeUnit.HOURS;
-import static java.util.concurrent.TimeUnit.MILLISECONDS;
 import static java.util.concurrent.TimeUnit.MINUTES;
 
 public class TestBigQueryConfig
@@ -45,10 +44,10 @@ public class TestBigQueryConfig
                 .setMaxReadRowsRetries(3)
                 .setMetadataPageSize(1000)
                 .setCaseInsensitiveNameMatching(false)
-                .setCaseInsensitiveNameMatchingCacheTtl(new Duration(0, MILLISECONDS))
+                .setCaseInsensitiveNameMatchingCacheTtl(Duration.ZERO)
                 .setViewsCacheTtl(new Duration(15, MINUTES))
                 .setServiceCacheTtl(new Duration(3, MINUTES))
-                .setMetadataCacheTtl(new Duration(0, MILLISECONDS))
+                .setMetadataCacheTtl(Duration.ZERO)
                 .setLegacyMetadataListing(false)
                 .setViewsEnabled(false)
                 .setArrowSerializationEnabled(true)

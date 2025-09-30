@@ -43,7 +43,6 @@ import static com.google.common.base.Preconditions.checkArgument;
 import static com.google.common.base.Throwables.throwIfInstanceOf;
 import static com.google.common.util.concurrent.MoreExecutors.directExecutor;
 import static java.util.Objects.requireNonNull;
-import static java.util.concurrent.TimeUnit.NANOSECONDS;
 
 public class DataDefinitionExecution<T extends Statement>
         implements QueryExecution
@@ -128,7 +127,7 @@ public class DataDefinitionExecution<T extends Statement>
     @Override
     public Duration getTotalCpuTime()
     {
-        return new Duration(0, NANOSECONDS);
+        return Duration.ZERO;
     }
 
     @Override

@@ -69,7 +69,6 @@ import static io.trino.testing.TestingConnectorSession.SESSION;
 import static java.lang.String.join;
 import static java.util.Collections.nCopies;
 import static java.util.concurrent.Executors.newSingleThreadScheduledExecutor;
-import static java.util.concurrent.TimeUnit.MILLISECONDS;
 import static java.util.concurrent.TimeUnit.NANOSECONDS;
 import static java.util.concurrent.TimeUnit.SECONDS;
 import static org.assertj.core.api.Assertions.assertThat;
@@ -481,7 +480,7 @@ public class TestPageProcessor
 
         // We set the expensive expression threshold to 0, so the expression is always considered expensive and the batch size gets halved until it becomes 1
         TestingTicker testingTicker = new TestingTicker();
-        ExpressionProfiler profiler = new ExpressionProfiler(testingTicker, new Duration(0, MILLISECONDS));
+        ExpressionProfiler profiler = new ExpressionProfiler(testingTicker, Duration.ZERO);
         PageProcessor pageProcessor = new PageProcessor(
                 Optional.empty(),
                 Optional.empty(),

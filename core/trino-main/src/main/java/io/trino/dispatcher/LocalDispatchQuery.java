@@ -47,7 +47,6 @@ import static io.trino.SystemSessionProperties.getRequiredWorkersMaxWait;
 import static io.trino.spi.StandardErrorCode.GENERIC_INTERNAL_ERROR;
 import static io.trino.util.Failures.toFailure;
 import static java.util.Objects.requireNonNull;
-import static java.util.concurrent.TimeUnit.MILLISECONDS;
 
 public class LocalDispatchQuery
         implements DispatchQuery
@@ -241,7 +240,7 @@ public class LocalDispatchQuery
     {
         return tryGetQueryExecution()
                 .map(QueryExecution::getTotalCpuTime)
-                .orElseGet(() -> new Duration(0, MILLISECONDS));
+                .orElseGet(() -> Duration.ZERO);
     }
 
     @Override

@@ -33,7 +33,7 @@ public class Backoff
 {
     private static final int MIN_RETRIES = 3;
     private static final List<Duration> DEFAULT_BACKOFF_DELAY_INTERVALS = ImmutableList.<Duration>builder()
-            .add(new Duration(0, MILLISECONDS))
+            .add(Duration.ZERO)
             .add(new Duration(50, MILLISECONDS))
             .add(new Duration(100, MILLISECONDS))
             .add(new Duration(200, MILLISECONDS))
@@ -87,7 +87,7 @@ public class Backoff
     public synchronized Duration getFailureDuration()
     {
         if (firstFailureTime == 0) {
-            return new Duration(0, MILLISECONDS);
+            return Duration.ZERO;
         }
         long value = ticker.read() - firstFailureTime;
         return new Duration(value, NANOSECONDS);

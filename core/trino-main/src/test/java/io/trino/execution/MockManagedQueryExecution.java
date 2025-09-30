@@ -360,7 +360,7 @@ public class MockManagedQueryExecution
     public static class MockManagedQueryExecutionBuilder
     {
         private DataSize memoryUsage = DataSize.ofBytes(0);
-        private Duration cpuUsage = new Duration(0, MILLISECONDS);
+        private Duration cpuUsage = Duration.ZERO;
         private DataSize physicalInputDataUsage = DataSize.ofBytes(0);
         private int priority = 1;
         private String queryId = "query_id";

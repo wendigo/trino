@@ -77,7 +77,7 @@ public class DeltaLakeConfig
     private boolean checkpointFilteringEnabled = true;
     private Duration vacuumMinRetention = new Duration(7, DAYS);
     private Optional<String> hiveCatalogName = Optional.empty();
-    private Duration dynamicFilteringWaitTimeout = new Duration(0, SECONDS);
+    private Duration dynamicFilteringWaitTimeout = Duration.ZERO;
     private boolean tableStatisticsEnabled = true;
     private boolean extendedStatisticsEnabled = true;
     private boolean collectExtendedStatisticsOnWrite = true;

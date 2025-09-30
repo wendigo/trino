@@ -29,7 +29,6 @@ import java.util.Set;
 import static com.google.common.base.Preconditions.checkArgument;
 import static com.google.common.collect.ImmutableList.toImmutableList;
 import static java.util.Objects.requireNonNull;
-import static java.util.concurrent.TimeUnit.MILLISECONDS;
 
 public class TaskStats
 {
@@ -100,8 +99,8 @@ public class TaskStats
                 null,
                 null,
                 endTime,
-                new Duration(0, MILLISECONDS),
-                new Duration(0, MILLISECONDS),
+                Duration.ZERO,
+                Duration.ZERO,
                 0,
                 0,
                 0,
@@ -116,27 +115,27 @@ public class TaskStats
                 DataSize.ofBytes(0),
                 DataSize.ofBytes(0),
                 DataSize.ofBytes(0),
-                new Duration(0, MILLISECONDS),
-                new Duration(0, MILLISECONDS),
-                new Duration(0, MILLISECONDS),
+                Duration.ZERO,
+                Duration.ZERO,
+                Duration.ZERO,
                 false,
                 ImmutableSet.of(),
                 DataSize.ofBytes(0),
                 0,
-                new Duration(0, MILLISECONDS),
+                Duration.ZERO,
                 DataSize.ofBytes(0),
                 0,
                 DataSize.ofBytes(0),
                 0,
-                new Duration(0, MILLISECONDS),
+                Duration.ZERO,
                 DataSize.ofBytes(0),
                 0,
-                new Duration(0, MILLISECONDS),
+                Duration.ZERO,
                 DataSize.ofBytes(0),
                 DataSize.ofBytes(0),
                 Optional.empty(),
                 0,
-                new Duration(0, MILLISECONDS),
+                Duration.ZERO,
                 ImmutableList.of());
     }
 

@@ -561,7 +561,7 @@ public class InMemoryTransactionManager
         {
             Duration idleTime = Optional.ofNullable(idleStartTime.get())
                     .map(Duration::nanosSince)
-                    .orElse(new Duration(0, MILLISECONDS));
+                    .orElse(Duration.ZERO);
 
             // dereferencing this field is safe because the field is atomic, and activeCatalogs is a concurrent map
             @SuppressWarnings("FieldAccessNotGuarded") Optional<String> writtenCatalogName = Optional.ofNullable(this.writtenCatalog.get())

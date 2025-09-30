@@ -39,7 +39,6 @@ import java.util.Optional;
 import static io.trino.memory.LowMemoryKillerTestingUtils.taskId;
 import static io.trino.memory.LowMemoryKillerTestingUtils.toNodeMemoryInfoList;
 import static io.trino.memory.LowMemoryKillerTestingUtils.toRunningQueryInfoList;
-import static java.util.concurrent.TimeUnit.MILLISECONDS;
 import static org.assertj.core.api.Assertions.assertThat;
 
 public class TestTotalReservationOnBlockedNodesTaskLowMemoryKiller
@@ -267,8 +266,8 @@ public class TestTotalReservationOnBlockedNodesTaskLowMemoryKiller
                         null,
                         null,
                         null,
-                        new Duration(0, MILLISECONDS),
-                        new Duration(0, MILLISECONDS),
+                        Duration.ZERO,
+                        Duration.ZERO,
                         0,
                         0,
                         0,
@@ -283,27 +282,27 @@ public class TestTotalReservationOnBlockedNodesTaskLowMemoryKiller
                         DataSize.ofBytes(0),
                         DataSize.ofBytes(0),
                         DataSize.ofBytes(0),
-                        new Duration(0, MILLISECONDS),
-                        new Duration(0, MILLISECONDS),
-                        new Duration(0, MILLISECONDS),
+                        Duration.ZERO,
+                        Duration.ZERO,
+                        Duration.ZERO,
                         false,
                         ImmutableSet.of(),
                         DataSize.ofBytes(0),
                         0,
-                        new Duration(0, MILLISECONDS),
+                        Duration.ZERO,
                         DataSize.ofBytes(0),
                         0,
                         DataSize.ofBytes(0),
                         0,
-                        new Duration(0, MILLISECONDS),
+                        Duration.ZERO,
                         DataSize.ofBytes(0),
                         0,
-                        new Duration(0, MILLISECONDS),
+                        Duration.ZERO,
                         DataSize.ofBytes(0),
                         DataSize.ofBytes(0),
                         Optional.empty(),
                         0,
-                        new Duration(0, MILLISECONDS),
+                        Duration.ZERO,
                         ImmutableList.of()),
                 Optional.empty(),
                 false);
