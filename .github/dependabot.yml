@@ -4,6 +4,8 @@ updates:
     directory: "/"
     schedule:
       interval: "weekly"
+    cooldown:
+      default-days: 7
   - package-ecosystem: "maven"
     directory: "/"
     schedule:
@@ -11,3 +13,5 @@ updates:
     assignees:
       - wendigo
     open-pull-requests-limit: 10
+    cooldown:
+      default-days: 7
