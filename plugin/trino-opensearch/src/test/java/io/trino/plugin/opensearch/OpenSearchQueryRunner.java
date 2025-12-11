@@ -34,6 +34,7 @@ import org.opensearch.client.RestHighLevelClient;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.atomic.AtomicLong;
 
 import static io.airlift.testing.Closeables.closeAllSuppress;
 import static io.airlift.units.Duration.nanosSince;
@@ -65,6 +66,7 @@ public final class OpenSearchQueryRunner
     public static final class Builder
             extends DistributedQueryRunner.Builder<Builder>
     {
+        private static final AtomicLong instanceId = new AtomicLong();
         private final HostAndPort address;
         private final Map<String, String> connectorProperties = new HashMap<>();
         private List<TpchTable<?>> initialTables = ImmutableList.of();
@@ -72,7 +74,8 @@ public final class OpenSearchQueryRunner
         private Builder(HostAndPort address)
         {
             super(testSessionBuilder()
-                    .setCatalog("opensearch")
+                    // We need separate catalog names because these tests check for JMX beans that would clash otherwise
+                    .setCatalog("opensearch_" + instanceId.incrementAndGet())
                     .setSchema(TPCH_SCHEMA)
                     .build());
 
@@ -116,7 +119,7 @@ public final class OpenSearchQueryRunner
                 queryRunner.createCatalog("tpch", "tpch");
 
                 queryRunner.installPlugin(new OpenSearchPlugin(new OpenSearchConnectorFactory()));
-                queryRunner.createCatalog("opensearch", "opensearch", connectorProperties);
+                queryRunner.createCatalog(queryRunner.getDefaultSession().getCatalog().orElseThrow(), "opensearch", connectorProperties);
 
                 LOG.info("Loading data...");
                 long startTime = System.nanoTime();

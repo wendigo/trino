@@ -33,6 +33,7 @@ import java.net.URISyntaxException;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.atomic.AtomicLong;
 
 import static com.google.common.io.Resources.getResource;
 import static io.airlift.testing.Closeables.closeAllSuppress;
@@ -91,6 +92,7 @@ public final class ElasticsearchQueryRunner
     public static final class Builder
             extends DistributedQueryRunner.Builder<Builder>
     {
+        private static final AtomicLong instanceId = new AtomicLong();
         private final ElasticsearchServer server;
         private final Map<String, String> connectorProperties = new HashMap<>();
         private List<TpchTable<?>> initialTables = ImmutableList.of();
@@ -98,7 +100,8 @@ public final class ElasticsearchQueryRunner
         private Builder(ElasticsearchServer server)
         {
             super(testSessionBuilder()
-                    .setCatalog("elasticsearch")
+                    // We need separate catalog names because these tests check for JMX beans that would clash otherwise
+                    .setCatalog("elasticsearch_" + instanceId.incrementAndGet())
                     .setSchema(TPCH_SCHEMA)
                     .build());
             this.server = requireNonNull(server, "server is null");
@@ -131,7 +134,7 @@ public final class ElasticsearchQueryRunner
                 queryRunner.createCatalog("tpch", "tpch");
 
                 queryRunner.installPlugin(new ElasticsearchPlugin(new ElasticsearchConnectorFactory()));
-                queryRunner.createCatalog("elasticsearch", "elasticsearch", connectorProperties);
+                queryRunner.createCatalog(queryRunner.getDefaultSession().getCatalog().orElseThrow(), "elasticsearch", connectorProperties);
 
                 TestingTrinoClient trinoClient = queryRunner.getClient();
 
