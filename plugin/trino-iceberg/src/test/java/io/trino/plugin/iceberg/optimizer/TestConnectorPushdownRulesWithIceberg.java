@@ -60,6 +60,7 @@ import java.io.IOException;
 import java.io.UncheckedIOException;
 import java.nio.file.Files;
 import java.util.Optional;
+import java.util.OptionalInt;
 import java.util.OptionalLong;
 
 import static com.google.common.io.MoreFiles.deleteRecursively;
@@ -162,7 +163,7 @@ public class TestConnectorPushdownRulesWithIceberg
                 DATA,
                 OptionalLong.of(1),
                 "",
-                Optional.empty(),
+                OptionalInt.empty(),
                 ImmutableMap.of(),
                 1,
                 TupleDomain.all(),
@@ -247,7 +248,7 @@ public class TestConnectorPushdownRulesWithIceberg
                 DATA,
                 OptionalLong.of(snapshotId),
                 "",
-                Optional.empty(),
+                OptionalInt.empty(),
                 ImmutableMap.of(),
                 1,
                 TupleDomain.all(),
@@ -299,7 +300,7 @@ public class TestConnectorPushdownRulesWithIceberg
                 DATA,
                 OptionalLong.empty(),
                 "",
-                Optional.empty(),
+                OptionalInt.empty(),
                 ImmutableMap.of(),
                 1,
                 TupleDomain.all(),
@@ -361,7 +362,7 @@ public class TestConnectorPushdownRulesWithIceberg
                 DATA,
                 OptionalLong.of(1),
                 "",
-                Optional.empty(),
+                OptionalInt.empty(),
                 ImmutableMap.of(),
                 1,
                 TupleDomain.all(),

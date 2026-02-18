@@ -28,6 +28,7 @@ import java.util.Locale;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
+import java.util.OptionalInt;
 import java.util.OptionalLong;
 import java.util.Set;
 
@@ -44,7 +45,7 @@ public class IcebergTableHandle
     private final OptionalLong snapshotId;
     private final String tableSchemaJson;
     // Empty means the partitioning spec is not known (can be the case for certain time travel queries).
-    private final Optional<Integer> specId;
+    private final OptionalInt specId;
     // Map of spec id to partition spec JSON for all specs in the table
     private final Map<Integer, String> partitionSpecJsons;
     private final int formatVersion;
@@ -84,7 +85,7 @@ public class IcebergTableHandle
             @JsonProperty("tableType") TableType tableType,
             @JsonProperty("snapshotId") OptionalLong snapshotId,
             @JsonProperty("tableSchemaJson") String tableSchemaJson,
-            @JsonProperty("specId") Optional<Integer> specId,
+            @JsonProperty("specId") OptionalInt specId,
             @JsonProperty("partitionSpecJsons") Map<Integer, String> partitionSpecJsons,
             @JsonProperty("formatVersion") int formatVersion,
             @JsonProperty("unenforcedPredicate") TupleDomain<IcebergColumnHandle> unenforcedPredicate,
@@ -124,7 +125,7 @@ public class IcebergTableHandle
             TableType tableType,
             OptionalLong snapshotId,
             String tableSchemaJson,
-            Optional<Integer> specId,
+            OptionalInt specId,
             Map<Integer, String> partitionSpecJsons,
             int formatVersion,
             TupleDomain<IcebergColumnHandle> unenforcedPredicate,
@@ -148,7 +149,7 @@ public class IcebergTableHandle
         this.specId = requireNonNull(specId, "specId is null");
         this.partitionSpecJsons = ImmutableMap.copyOf(requireNonNull(partitionSpecJsons, "partitionSpecJsons is null"));
         checkArgument(
-                specId.isEmpty() || partitionSpecJsons.containsKey(specId.get()),
+                specId.isEmpty() || partitionSpecJsons.containsKey(specId.getAsInt()),
                 "specId %s is present but partitionSpecJsons does not contain this id",
                 specId);
         this.formatVersion = formatVersion;
@@ -198,7 +199,7 @@ public class IcebergTableHandle
     }
 
     @JsonProperty
-    public Optional<Integer> getSpecId()
+    public OptionalInt getSpecId()
     {
         return specId;
     }
