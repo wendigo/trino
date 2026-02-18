@@ -117,6 +117,7 @@ import java.util.Collection;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.OptionalDouble;
 import java.util.Set;
 import java.util.TreeMap;
 import java.util.function.BiFunction;
@@ -1468,13 +1469,13 @@ public class MySqlClient
     // See https://dev.mysql.com/doc/refman/8.0/en/optimizer-statistics.html
     public static class ColumnHistogram
     {
-        private final Optional<Double> nullFraction;
+        private final OptionalDouble nullFraction;
         private final Optional<String> histogramType;
         private final Optional<List<List<Object>>> buckets;
 
         @JsonCreator
         public ColumnHistogram(
-                @JsonProperty("null-values") Optional<Double> nullFraction,
+                @JsonProperty("null-values") OptionalDouble nullFraction,
                 @JsonProperty("histogram-type") Optional<String> histogramType,
                 @JsonProperty("buckets") Optional<List<List<Object>>> buckets)
         {
@@ -1485,7 +1486,7 @@ public class MySqlClient
 
         public void updateColumnStatistics(ColumnStatistics.Builder columnStatistics)
         {
-            nullFraction.map(Estimate::of).ifPresent(columnStatistics::setNullsFraction);
+            nullFraction.ifPresent(value -> columnStatistics.setNullsFraction(Estimate.of(value)));
             getDistinctValuesCount().map(Estimate::of).ifPresent(columnStatistics::setDistinctValuesCount);
         }
 

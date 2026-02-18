@@ -208,7 +208,7 @@ public abstract class AbstractResourceConfigurationManager
         }
         else {
             synchronized (memoryPoolFraction) {
-                double fraction = match.getSoftMemoryLimitFraction().get();
+                double fraction = match.getSoftMemoryLimitFraction().getAsDouble();
                 memoryPoolFraction.put(group, fraction);
                 group.setSoftMemoryLimitBytes((long) (memoryPoolBytes * fraction));
             }
