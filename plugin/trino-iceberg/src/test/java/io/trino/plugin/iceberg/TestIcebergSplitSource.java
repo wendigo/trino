@@ -68,6 +68,7 @@ import java.nio.ByteBuffer;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.OptionalInt;
 import java.util.OptionalLong;
 import java.util.Set;
 import java.util.UUID;
@@ -444,7 +445,7 @@ public class TestIcebergSplitSource
                 TableType.DATA,
                 OptionalLong.empty(),
                 SchemaParser.toJson(nationTable.schema()),
-                Optional.ofNullable(nationTable.spec()).map(PartitionSpec::specId),
+                nationTable.spec() == null ? OptionalInt.empty() : OptionalInt.of(nationTable.spec().specId()),
                 transformValues(nationTable.specs(), PartitionSpecParser::toJson),
                 1,
                 unenforcedPredicate,

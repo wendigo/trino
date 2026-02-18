@@ -238,6 +238,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Map.Entry;
 import java.util.Optional;
+import java.util.OptionalInt;
 import java.util.OptionalLong;
 import java.util.Set;
 import java.util.concurrent.Callable;
@@ -716,7 +717,7 @@ public class IcebergMetadata
                 DATA,
                 tableSnapshotId,
                 SchemaParser.toJson(tableSchema),
-                partitionSpec.map(PartitionSpec::specId),
+                partitionSpec.map(spec -> OptionalInt.of(spec.specId())).orElseGet(OptionalInt::empty),
                 transformValues(table.specs(), PartitionSpecParser::toJson),
                 formatVersion(table),
                 TupleDomain.all(),
@@ -1092,8 +1093,9 @@ public class IcebergMetadata
         IcebergTableHandle table = (IcebergTableHandle) handle;
         if (isQueryPartitionFilterRequiredForTable(session, table) && table.getEnforcedPredicate().isAll() && !table.getForAnalyze().orElseThrow()) {
             Schema schema = SchemaParser.fromJson(table.getTableSchemaJson());
-            Optional<PartitionSpec> partitionSpec = table.getSpecId()
-                    .map(specId -> PartitionSpecParser.fromJson(schema, table.getPartitionSpecJsons().get(specId)));
+            Optional<PartitionSpec> partitionSpec = table.getSpecId().isPresent() ?
+                    Optional.of(PartitionSpecParser.fromJson(schema, table.getPartitionSpecJsons().get(table.getSpecId().getAsInt()))) :
+                    Optional.empty();
             if (partitionSpec.isEmpty() || partitionSpec.get().isUnpartitioned()) {
                 return;
             }
@@ -2585,12 +2587,11 @@ public class IcebergMetadata
     public Optional<Object> getInfo(ConnectorSession session, ConnectorTableHandle tableHandle)
     {
         IcebergTableHandle icebergTableHandle = (IcebergTableHandle) tableHandle;
-        List<String> partitionFields = icebergTableHandle.getSpecId()
-                .map(specId -> PartitionSpecParser.fromJson(SchemaParser.fromJson(icebergTableHandle.getTableSchemaJson()), icebergTableHandle.getPartitionSpecJsons().get(specId))
+        List<String> partitionFields = icebergTableHandle.getSpecId().isPresent() ?
+                PartitionSpecParser.fromJson(SchemaParser.fromJson(icebergTableHandle.getTableSchemaJson()), icebergTableHandle.getPartitionSpecJsons().get(icebergTableHandle.getSpecId().getAsInt()))
                         .fields().stream()
                         .map(field -> field.name() + ": " + field.transform())
-                        .collect(toImmutableList()))
-                .orElse(ImmutableList.of());
+                        .collect(toImmutableList()) : ImmutableList.of();
 
         Map<String, String> summary = ImmutableMap.of();
         if (icebergTableHandle.getSnapshotId().isPresent()) {

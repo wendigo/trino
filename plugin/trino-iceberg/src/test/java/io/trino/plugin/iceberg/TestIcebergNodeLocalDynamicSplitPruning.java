@@ -63,6 +63,7 @@ import java.time.LocalDate;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.OptionalInt;
 import java.util.OptionalLong;
 import java.util.Set;
 import java.util.concurrent.CompletableFuture;
@@ -161,7 +162,7 @@ public class TestIcebergNodeLocalDynamicSplitPruning
                             TableType.DATA,
                             OptionalLong.empty(),
                             SchemaParser.toJson(tableSchema),
-                            Optional.of(0),
+                            OptionalInt.of(0),
                             ImmutableMap.of(0, PartitionSpecParser.toJson(PartitionSpec.unpartitioned())),
                             2,
                             TupleDomain.withColumnDomains(ImmutableMap.of(keyColumnHandle, Domain.singleValue(INTEGER, (long) keyColumnValue))),
@@ -222,7 +223,7 @@ public class TestIcebergNodeLocalDynamicSplitPruning
                             TableType.DATA,
                             OptionalLong.empty(),
                             SchemaParser.toJson(tableSchema),
-                            Optional.of(0),
+                            OptionalInt.of(0),
                             ImmutableMap.of(0, PartitionSpecParser.toJson(PartitionSpec.unpartitioned())),
                             2,
                             TupleDomain.all(),
@@ -333,7 +334,7 @@ public class TestIcebergNodeLocalDynamicSplitPruning
                             TableType.DATA,
                             OptionalLong.empty(),
                             SchemaParser.toJson(tableSchema),
-                            Optional.of(partitionSpec.specId()),
+                            OptionalInt.of(partitionSpec.specId()),
                             ImmutableMap.of(partitionSpec.specId(), PartitionSpecParser.toJson(partitionSpec)),
                             2,
                             TupleDomain.all(),
@@ -489,7 +490,7 @@ public class TestIcebergNodeLocalDynamicSplitPruning
                             TableType.DATA,
                             OptionalLong.empty(),
                             SchemaParser.toJson(tableSchema),
-                            Optional.of(partitionSpec.specId()),
+                            OptionalInt.of(partitionSpec.specId()),
                             ImmutableMap.of(partitionSpec.specId(), PartitionSpecParser.toJson(partitionSpec)),
                             2,
                             TupleDomain.withColumnDomains(
