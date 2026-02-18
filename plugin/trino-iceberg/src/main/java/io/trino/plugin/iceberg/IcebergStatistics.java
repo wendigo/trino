@@ -29,6 +29,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Map.Entry;
 import java.util.Optional;
+import java.util.OptionalLong;
 
 import static io.trino.plugin.iceberg.IcebergTypes.convertIcebergValueToTrino;
 import static io.trino.plugin.iceberg.IcebergUtil.deserializePartitionValue;
@@ -105,7 +106,7 @@ public record IcebergStatistics(
                                 trinoType,
                                 trinoValue,
                                 trinoValue,
-                                Optional.of(0L),
+                                OptionalLong.of(0),
                                 dataFile.recordCount());
                     }
                     else {
@@ -120,7 +121,7 @@ public record IcebergStatistics(
                             Conversions.fromByteBuffer(column.type(), Optional.ofNullable(dataFile.lowerBounds()).map(a -> a.get(id)).orElse(null)));
                     Object upperBound = convertIcebergValueToTrino(column.type(),
                             Conversions.fromByteBuffer(column.type(), Optional.ofNullable(dataFile.upperBounds()).map(a -> a.get(id)).orElse(null)));
-                    Optional<Long> nullCount = Optional.ofNullable(nullValueCounts).map(nullCounts -> nullCounts.get(id));
+                    OptionalLong nullCount = (nullValueCounts == null || !nullValueCounts.containsKey(id)) ? OptionalLong.empty() : OptionalLong.of(nullValueCounts.get(id));
                     updateMinMaxStats(
                             id,
                             trinoType,
@@ -158,11 +159,11 @@ public record IcebergStatistics(
                 io.trino.spi.type.Type type,
                 @Nullable Object lowerBound,
                 @Nullable Object upperBound,
-                Optional<Long> nullCount,
+                OptionalLong nullCount,
                 long recordCount)
         {
             // If this column is only nulls for this file, don't update or invalidate min/max statistics
-            if (type.isOrderable() && (nullCount.isEmpty() || nullCount.get() != recordCount)) {
+            if (type.isOrderable() && (nullCount.isEmpty() || nullCount.getAsLong() != recordCount)) {
                 // Capture the initial bounds during construction so there are always valid min/max values to compare to. This does make the first call to
                 // `ColumnStatistics#updateMinMax` a no-op.
                 columnStatistics.computeIfAbsent(id, _ -> {

@@ -259,7 +259,7 @@ class TestFileBasedConflictDetection
                 "schemaName",
                 "tableName",
                 TableType.DATA,
-                Optional.empty(),
+                OptionalLong.empty(),
                 SchemaParser.toJson(TABLE_SCHEMA),
                 Optional.of(partitionSpec.specId()),
                 ImmutableMap.of(partitionSpec.specId(), partitionSpecJson),

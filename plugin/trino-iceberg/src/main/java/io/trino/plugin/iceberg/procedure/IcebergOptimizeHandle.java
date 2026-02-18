@@ -23,13 +23,13 @@ import org.apache.iceberg.SortOrder;
 
 import java.util.List;
 import java.util.Map;
-import java.util.Optional;
+import java.util.OptionalLong;
 
 import static com.google.common.base.Preconditions.checkArgument;
 import static java.util.Objects.requireNonNull;
 
 public record IcebergOptimizeHandle(
-        Optional<Long> snapshotId,
+        OptionalLong snapshotId,
         String schemaAsJson,
         String partitionSpecAsJson,
         List<IcebergColumnHandle> partitionColumns,

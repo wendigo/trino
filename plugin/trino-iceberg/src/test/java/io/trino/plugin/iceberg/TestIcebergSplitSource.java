@@ -442,7 +442,7 @@ public class TestIcebergSplitSource
                 schemaTableName.getSchemaName(),
                 schemaTableName.getTableName(),
                 TableType.DATA,
-                Optional.empty(),
+                OptionalLong.empty(),
                 SchemaParser.toJson(nationTable.schema()),
                 Optional.ofNullable(nationTable.spec()).map(PartitionSpec::specId),
                 transformValues(nationTable.specs(), PartitionSpecParser::toJson),
