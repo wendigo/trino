@@ -136,7 +136,7 @@ public class IcebergSplitSource
     private final IcebergTableHandle tableHandle;
     private final Map<String, String> fileIoProperties;
     private final Scan<?, FileScanTask, CombinedScanTask> tableScan;
-    private final Optional<Long> maxScannedFileSizeInBytes;
+    private final OptionalLong maxScannedFileSizeInBytes;
     private final Map<Integer, Type.PrimitiveType> fieldIdToType;
     private final DynamicFilter dynamicFilter;
     private final long dynamicFilteringWaitTimeoutMillis;
@@ -205,7 +205,7 @@ public class IcebergSplitSource
         this.tableHandle = requireNonNull(tableHandle, "tableHandle is null");
         this.fileIoProperties = requireNonNull(icebergTable.io().properties(), "fileIoProperties is null");
         this.tableScan = requireNonNull(tableScan, "tableScan is null");
-        this.maxScannedFileSizeInBytes = maxScannedFileSize.map(DataSize::toBytes);
+        this.maxScannedFileSizeInBytes = maxScannedFileSize.isPresent() ? OptionalLong.of(maxScannedFileSize.orElseThrow().toBytes()) : OptionalLong.empty();
         this.fieldIdToType = primitiveFieldTypes(tableScan.schema());
         this.dynamicFilter = requireNonNull(dynamicFilter, "dynamicFilter is null");
         this.dynamicFilteringWaitTimeoutMillis = dynamicFilteringWaitTimeout.toMillis();
@@ -420,7 +420,7 @@ public class IcebergSplitSource
         BaseFileScanTask fileScanTask = (BaseFileScanTask) fileScanTaskWithDomain.fileScanTask();
         if (fileHasNoDeletions &&
                 maxScannedFileSizeInBytes.isPresent() &&
-                fileScanTask.file().fileSizeInBytes() > maxScannedFileSizeInBytes.get()) {
+                fileScanTask.file().fileSizeInBytes() > maxScannedFileSizeInBytes.getAsLong()) {
             return true;
         }
 

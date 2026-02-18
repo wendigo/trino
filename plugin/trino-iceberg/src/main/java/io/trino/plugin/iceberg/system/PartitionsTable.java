@@ -45,6 +45,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Map.Entry;
 import java.util.Optional;
+import java.util.OptionalLong;
 import java.util.Set;
 import java.util.concurrent.ExecutorService;
 import java.util.stream.Stream;
@@ -70,7 +71,7 @@ public class PartitionsTable
 {
     private final TypeManager typeManager;
     private final Table icebergTable;
-    private final Optional<Long> snapshotId;
+    private final OptionalLong snapshotId;
     private final Map<Integer, Type.PrimitiveType> idToTypeMapping;
     private final List<NestedField> nonPartitionPrimitiveColumns;
     private final Optional<IcebergPartitionColumn> partitionColumnType;
@@ -81,7 +82,7 @@ public class PartitionsTable
     private final ConnectorTableMetadata connectorTableMetadata;
     private final ExecutorService executor;
 
-    public PartitionsTable(SchemaTableName tableName, TypeManager typeManager, Table icebergTable, Optional<Long> snapshotId, ExecutorService executor)
+    public PartitionsTable(SchemaTableName tableName, TypeManager typeManager, Table icebergTable, OptionalLong snapshotId, ExecutorService executor)
     {
         this.typeManager = requireNonNull(typeManager, "typeManager is null");
         this.icebergTable = requireNonNull(icebergTable, "icebergTable is null");
@@ -164,7 +165,7 @@ public class PartitionsTable
             return new InMemoryRecordSet(resultTypes, ImmutableList.of()).cursor();
         }
         TableScan tableScan = icebergTable.newScan()
-                .useSnapshot(snapshotId.get())
+                .useSnapshot(snapshotId.getAsLong())
                 .includeColumnStats()
                 .planWith(executor);
         // TODO make the cursor lazy
