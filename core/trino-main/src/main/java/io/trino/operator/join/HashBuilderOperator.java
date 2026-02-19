@@ -44,6 +44,7 @@ import java.io.IOException;
 import java.util.ArrayDeque;
 import java.util.List;
 import java.util.Optional;
+import java.util.OptionalInt;
 import java.util.OptionalLong;
 import java.util.Queue;
 
@@ -76,7 +77,7 @@ public class HashBuilderOperator
         private final List<Integer> outputChannels;
         private final List<Integer> hashChannels;
         private final Optional<JoinFilterFunctionFactory> filterFunctionFactory;
-        private final Optional<Integer> sortChannel;
+        private final OptionalInt sortChannel;
         private final List<JoinFilterFunctionFactory> searchFunctionFactories;
         private final PagesIndex.Factory pagesIndexFactory;
 
@@ -96,7 +97,7 @@ public class HashBuilderOperator
                 List<Integer> outputChannels,
                 List<Integer> hashChannels,
                 Optional<JoinFilterFunctionFactory> filterFunctionFactory,
-                Optional<Integer> sortChannel,
+                OptionalInt sortChannel,
                 List<JoinFilterFunctionFactory> searchFunctionFactories,
                 int expectedPositions,
                 PagesIndex.Factory pagesIndexFactory,
@@ -214,7 +215,7 @@ public class HashBuilderOperator
     private final List<Integer> outputChannels;
     private final List<Integer> hashChannels;
     private final Optional<JoinFilterFunctionFactory> filterFunctionFactory;
-    private final Optional<Integer> sortChannel;
+    private final OptionalInt sortChannel;
     private final List<JoinFilterFunctionFactory> searchFunctionFactories;
 
     private final PagesIndex index;
@@ -246,7 +247,7 @@ public class HashBuilderOperator
             List<Integer> outputChannels,
             List<Integer> hashChannels,
             Optional<JoinFilterFunctionFactory> filterFunctionFactory,
-            Optional<Integer> sortChannel,
+            OptionalInt sortChannel,
             List<JoinFilterFunctionFactory> searchFunctionFactories,
             int expectedPositions,
             PagesIndex.Factory pagesIndexFactory,

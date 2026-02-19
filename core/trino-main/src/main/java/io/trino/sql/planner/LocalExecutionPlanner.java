@@ -2797,10 +2797,12 @@ public class LocalExecutionPlanner
                     .filter(symbol -> probeNode.getOutputSymbols().contains(symbol))
                     .collect(toImmutableList());
             List<Integer> probeOutputChannels = ImmutableList.copyOf(getChannelsForSymbols(probeOutputSymbols, probeSource.getLayout()));
-            Function<Symbol, Integer> probeChannelGetter = channelGetter(probeSource);
-            int probeChannel = probeChannelGetter.apply(probeSymbol);
+            Function<Symbol, OptionalInt> probeChannelGetter = channelGetter(probeSource);
+            int probeChannel = probeChannelGetter.apply(probeSymbol).orElseThrow();
 
-            Optional<Integer> partitionChannel = node.getLeftPartitionSymbol().map(probeChannelGetter);
+            OptionalInt partitionChannel = node.getLeftPartitionSymbol()
+                    .map(probeChannelGetter)
+                    .orElse(OptionalInt.empty());
 
             return new SpatialJoinOperatorFactory(
                     context.getNextOperatorId(),
@@ -2831,9 +2833,10 @@ public class LocalExecutionPlanner
                     .collect(toImmutableList());
             Map<Symbol, Integer> buildLayout = buildSource.getLayout();
             List<Integer> buildOutputChannels = ImmutableList.copyOf(getChannelsForSymbols(buildOutputSymbols, buildLayout));
-            Function<Symbol, Integer> buildChannelGetter = channelGetter(buildSource);
-            Integer buildChannel = buildChannelGetter.apply(buildSymbol);
-            Optional<Integer> radiusChannel = radiusSymbol.map(buildChannelGetter);
+            Function<Symbol, OptionalInt> buildChannelGetter = channelGetter(buildSource);
+            OptionalInt buildChannel = buildChannelGetter.apply(buildSymbol);
+            OptionalInt radiusChannel = radiusSymbol.map(buildChannelGetter)
+                    .orElse(OptionalInt.empty());
 
             Optional<JoinFilterFunctionFactory> filterFunctionFactory = joinFilter
                     .map(filterExpression -> compileJoinFilterFunction(
@@ -2841,14 +2844,16 @@ public class LocalExecutionPlanner
                             probeLayout,
                             buildLayout));
 
-            Optional<Integer> partitionChannel = node.getRightPartitionSymbol().map(buildChannelGetter);
+            OptionalInt partitionChannel = node.getRightPartitionSymbol()
+                    .map(buildChannelGetter)
+                    .orElse(OptionalInt.empty());
 
             SpatialIndexBuilderOperatorFactory builderOperatorFactory = new SpatialIndexBuilderOperatorFactory(
                     buildContext.getNextOperatorId(),
                     node.getId(),
                     buildSource.getTypes(),
                     buildOutputChannels,
-                    buildChannel,
+                    buildChannel.orElseThrow(),
                     radiusChannel,
                     constantRadius,
                     partitionChannel,
@@ -2921,10 +2926,12 @@ public class LocalExecutionPlanner
             Optional<SortExpressionContext> sortExpressionContext = node.getFilter()
                     .flatMap(filter -> extractSortExpression(ImmutableSet.copyOf(node.getRight().getOutputSymbols()), filter));
 
-            Optional<Integer> sortChannel = sortExpressionContext
+            OptionalInt sortChannel = sortExpressionContext
                     .map(SortExpressionContext::getSortExpression)
                     .map(Symbol::from)
-                    .map(sortSymbol -> createJoinSourcesLayout(buildLayout, probeSource.getLayout()).get(sortSymbol));
+                    .map(sortSymbol -> createJoinSourcesLayout(buildLayout, probeSource.getLayout()).get(sortSymbol))
+                    .map(OptionalInt::of)
+                    .orElse(OptionalInt.empty());
 
             List<JoinFilterFunctionFactory> searchFunctionFactories = sortExpressionContext
                     .map(SortExpressionContext::getSearchExpressions)
@@ -4233,11 +4240,11 @@ public class LocalExecutionPlanner
         return builder.build();
     }
 
-    private static Function<Symbol, Integer> channelGetter(PhysicalOperation source)
+    private static Function<Symbol, OptionalInt> channelGetter(PhysicalOperation source)
     {
         return input -> {
             checkArgument(source.getLayout().containsKey(input));
-            return source.getLayout().get(input);
+            return OptionalInt.of(source.getLayout().get(input));
         };
     }
 
