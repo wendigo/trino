@@ -161,14 +161,6 @@ public class PluginManager
     private void loadPlugin(String plugin, Supplier<PluginClassLoader> createClassLoader)
     {
         PluginClassLoader pluginClassLoader = createClassLoader.get();
-
-        if (log.isDebugEnabled()) {
-            log.debug("Classpath for plugin:");
-            for (URL url : pluginClassLoader.getURLs()) {
-                log.debug("    %s", url.getPath());
-            }
-        }
-
         handleResolver.registerClassLoader(pluginClassLoader);
         try (ThreadContextClassLoader _ = new ThreadContextClassLoader(pluginClassLoader)) {
             for (InstalledFeatures features : loadPlugin(plugin, pluginClassLoader)) {
@@ -316,7 +308,15 @@ public class PluginManager
     public static PluginClassLoader createClassLoader(String pluginName, List<URL> urls)
     {
         ClassLoader parent = PluginManager.class.getClassLoader();
-        return new PluginClassLoader(pluginName, urls, parent, SPI_PACKAGES);
+        PluginClassLoader classLoader = new PluginClassLoader(pluginName, urls, parent, SPI_PACKAGES);
+
+        if (log.isDebugEnabled()) {
+            log.debug("Classpath for plugin %s: ", pluginName);
+            for (URL url : classLoader.getURLs()) {
+                log.debug("    %s", url.getPath());
+            }
+        }
+        return classLoader;
     }
 
     public interface PluginsProvider
