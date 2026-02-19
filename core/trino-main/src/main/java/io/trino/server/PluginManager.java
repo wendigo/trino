@@ -193,9 +193,7 @@ public class PluginManager
     @Override
     public InstalledFeatures installPlugin(Plugin plugin)
     {
-        InstalledFeatures features = installPluginInternal(plugin);
-        typeRegistry.verifyTypes();
-        return features;
+        return installPluginInternal(plugin);
     }
 
     private InstalledFeatures installPluginInternal(Plugin plugin)
