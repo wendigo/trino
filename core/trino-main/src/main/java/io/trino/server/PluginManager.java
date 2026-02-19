@@ -162,9 +162,11 @@ public class PluginManager
     {
         PluginClassLoader pluginClassLoader = createClassLoader.get();
 
-        log.debug("Classpath for plugin:");
-        for (URL url : pluginClassLoader.getURLs()) {
-            log.debug("    %s", url.getPath());
+        if (log.isDebugEnabled()) {
+            log.debug("Classpath for plugin:");
+            for (URL url : pluginClassLoader.getURLs()) {
+                log.debug("    %s", url.getPath());
+            }
         }
 
         handleResolver.registerClassLoader(pluginClassLoader);
