@@ -16,12 +16,16 @@ package io.trino.sql.ir;
 import com.google.common.collect.ImmutableList;
 import io.trino.metadata.Metadata;
 import io.trino.metadata.ResolvedFunction;
+import io.trino.operator.scalar.TryCastFunction;
+import io.trino.operator.scalar.TryFunction;
+import io.trino.spi.function.CatalogSchemaFunctionName;
 import io.trino.spi.type.RowType;
 import io.trino.sql.PlannerContext;
 import io.trino.type.TypeCoercion;
 
 import java.util.List;
 
+import static io.trino.metadata.GlobalFunctionCatalog.builtinFunctionName;
 import static io.trino.spi.block.RowValueBuilder.buildRowValue;
 import static io.trino.spi.type.BooleanType.BOOLEAN;
 import static io.trino.spi.type.TypeUtils.writeNativeValue;
@@ -31,6 +35,9 @@ import static io.trino.sql.analyzer.TypeSignatureProvider.fromTypes;
 
 public final class IrExpressions
 {
+    private static final CatalogSchemaFunctionName TRY_FUNCTION_NAME = builtinFunctionName(TryFunction.NAME);
+    private static final CatalogSchemaFunctionName TRY_CAST_FUNCTION_NAME = builtinFunctionName(TryCastFunction.NAME);
+
     private IrExpressions() {}
 
     public static Expression ifExpression(Expression condition, Expression trueCase)
@@ -68,6 +75,8 @@ public final class IrExpressions
         return switch (expression) {
             // These expressions never fail
             case Bind _, Constant _, FieldReference _, Reference _ -> false;
+            // Try functions never fail regardless of whether their input might fail
+            case Call e when isTryFunction(e.function()) -> false;
 
             // These expressions need to verify their operands
             case Array e -> e.elements().stream().anyMatch(element -> mayFail(plannerContext, element));
@@ -114,5 +123,10 @@ public final class IrExpressions
         return new Call(
                 metadata.resolveBuiltinFunction("$not", fromTypes(BOOLEAN)),
                 ImmutableList.of(expression));
+    }
+
+    private static boolean isTryFunction(ResolvedFunction function)
+    {
+        return function.name().equals(TRY_FUNCTION_NAME) || function.name().equals(TRY_CAST_FUNCTION_NAME);
     }
 }
