@@ -37,7 +37,11 @@ public @interface ScalarFunction
 
     /**
      * Describes whether function never throws any exception
-     * for any possible combination of input arguments.
+     * for any possible combination of never failing input arguments,
+     * including lambda expressions.
+     *
+     * Function call involving never failing scalar function is considered never failing
+     * when all its input expressions are also never failing.
      */
     boolean neverFails() default false;
 }

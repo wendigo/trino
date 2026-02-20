@@ -67,7 +67,7 @@ public final class IrExpressions
     {
         return switch (expression) {
             // These expressions never fail
-            case Bind _, Constant _, FieldReference _, Lambda _, Reference _ -> false;
+            case Bind _, Constant _, FieldReference _, Reference _ -> false;
 
             // These expressions need to verify their operands
             case Array e -> e.elements().stream().anyMatch(element -> mayFail(plannerContext, element));
@@ -80,6 +80,7 @@ public final class IrExpressions
             case Comparison e -> mayFail(plannerContext, e.left()) || mayFail(plannerContext, e.right());
             case In e -> mayFail(plannerContext, e.value()) || e.valueList().stream().anyMatch(argument -> mayFail(plannerContext, argument));
             case IsNull e -> mayFail(plannerContext, e.value());
+            case Lambda e -> mayFail(plannerContext, e.body());
             case Logical e -> e.terms().stream().anyMatch(argument -> mayFail(plannerContext, argument));
             case NullIf e -> mayFail(plannerContext, e.first()) || mayFail(plannerContext, e.second());
             case Row e -> e.items().stream().anyMatch(argument -> mayFail(plannerContext, argument));
