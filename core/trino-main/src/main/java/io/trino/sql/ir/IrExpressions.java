@@ -81,6 +81,8 @@ public final class IrExpressions
             // These expressions need to verify their operands
             case Array e -> e.elements().stream().anyMatch(element -> mayFail(plannerContext, element));
             case Between e -> mayFail(plannerContext, e.value()) || mayFail(plannerContext, e.min()) || mayFail(plannerContext, e.max());
+            // Function call is considered never failing if the function itself is marked as never failing and all input arguments
+            // are never failing too.
             case Call e -> mayFail(e.function()) || e.arguments().stream().anyMatch(argument -> mayFail(plannerContext, argument));
             case Case e -> e.whenClauses().stream().anyMatch(clause -> mayFail(plannerContext, clause.getOperand()) || mayFail(plannerContext, clause.getResult())) ||
                     mayFail(plannerContext, e.defaultValue());
