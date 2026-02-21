@@ -70,13 +70,21 @@ public class FunctionMetadata
         if (functionNullability.getArgumentNullable().size() != signature.getArgumentTypes().size()) {
             throw new IllegalArgumentException("signature and functionNullability must have same argument count");
         }
-
+        if (neverFails && acceptsLambdaArgument(signature)) {
+            throw new IllegalArgumentException("function %s might fail if it accepts and invoke lambda argument".formatted(functionId));
+        }
         this.hidden = hidden;
         this.deterministic = deterministic;
         this.neverFails = neverFails;
         this.description = requireNonNull(description, "description is null");
         this.kind = requireNonNull(kind, "kind is null");
         this.deprecated = deprecated;
+    }
+
+    private static boolean acceptsLambdaArgument(Signature signature)
+    {
+        return signature.getArgumentTypes().stream()
+                .anyMatch(typeSignature -> typeSignature.getBase().equals("function"));
     }
 
     /**
