@@ -99,6 +99,7 @@ import jakarta.ws.rs.QueryParam;
 import jakarta.ws.rs.core.Context;
 import jakarta.ws.rs.core.MediaType;
 import jakarta.ws.rs.core.UriInfo;
+import org.junit.jupiter.api.RepeatedTest;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.Timeout;
 
@@ -185,6 +186,7 @@ public class TestHttpRemoteTask
 
     @Test
     @Timeout(30)
+    @RepeatedTest(100)
     public void testRejectedExecution()
             throws Exception
     {
