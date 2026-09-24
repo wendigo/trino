@@ -575,13 +575,19 @@ public class ReorderJoins
 
         private JoinEnumerationResult setJoinNodeProperties(JoinNode joinNode)
         {
+            // Every candidate below joins the same sources on the same clauses, and differs only in
+            // distribution type and in which side is the build one, neither of which JoinStatsRule
+            // looks at. The estimate is therefore derived once here and handed to each candidate,
+            // which turns the dominant cost of enumerating a partition into a single calculation.
+            PlanNodeStatsEstimate stats = statsProvider.getStats(joinNode);
+
             if (isAtMostScalar(joinNode.getRight(), lookup)) {
-                return createJoinEnumerationResult(joinNode.withDistributionType(REPLICATED));
+                return createJoinEnumerationResult(joinNode.withDistributionType(REPLICATED), stats);
             }
             if (isAtMostScalar(joinNode.getLeft(), lookup)) {
-                return createJoinEnumerationResult(joinNode.flipChildren().withDistributionType(REPLICATED));
+                return createJoinEnumerationResult(joinNode.flipChildren().withDistributionType(REPLICATED), stats);
             }
-            List<JoinEnumerationResult> possibleJoinNodes = getPossibleJoinNodes(joinNode, getJoinDistributionType(session));
+            List<JoinEnumerationResult> possibleJoinNodes = getPossibleJoinNodes(joinNode, getJoinDistributionType(session), stats);
             verify(!possibleJoinNodes.isEmpty(), "possibleJoinNodes is empty");
             for (JoinEnumerationResult possibleJoinNode : possibleJoinNodes) {
                 if (possibleJoinNode.equals(UNKNOWN_COST_RESULT)) {
@@ -591,7 +597,7 @@ public class ReorderJoins
             return resultComparator.min(possibleJoinNodes);
         }
 
-        private List<JoinEnumerationResult> getPossibleJoinNodes(JoinNode joinNode, JoinDistributionType distributionType)
+        private List<JoinEnumerationResult> getPossibleJoinNodes(JoinNode joinNode, JoinDistributionType distributionType, PlanNodeStatsEstimate stats)
         {
             checkArgument(joinNode.getType() == INNER, "unexpected join node type: %s", joinNode.getType());
 
@@ -599,47 +605,48 @@ public class ReorderJoins
             JoinNode flipped = joinNode.flipChildren();
 
             if (joinNode.isCrossJoin()) {
-                return getPossibleJoinNodes(joinNode, flipped, REPLICATED);
+                return getPossibleJoinNodes(joinNode, flipped, REPLICATED, stats);
             }
 
             return switch (distributionType) {
-                case PARTITIONED -> getPossibleJoinNodes(joinNode, flipped, PARTITIONED);
-                case BROADCAST -> getPossibleJoinNodes(joinNode, flipped, REPLICATED);
+                case PARTITIONED -> getPossibleJoinNodes(joinNode, flipped, PARTITIONED, stats);
+                case BROADCAST -> getPossibleJoinNodes(joinNode, flipped, REPLICATED, stats);
                 case AUTOMATIC -> ImmutableList.<JoinEnumerationResult>builder()
-                        .addAll(getPossibleJoinNodes(joinNode, flipped, PARTITIONED))
-                        .addAll(getPossibleJoinNodes(joinNode, flipped, REPLICATED, node -> canReplicate(node, context)))
+                        .addAll(getPossibleJoinNodes(joinNode, flipped, PARTITIONED, stats))
+                        .addAll(getPossibleJoinNodes(joinNode, flipped, REPLICATED, stats, node -> canReplicate(node, context)))
                         .build();
             };
         }
 
-        private List<JoinEnumerationResult> getPossibleJoinNodes(JoinNode joinNode, JoinNode flipped, DistributionType distributionType)
+        private List<JoinEnumerationResult> getPossibleJoinNodes(JoinNode joinNode, JoinNode flipped, DistributionType distributionType, PlanNodeStatsEstimate stats)
         {
-            return getPossibleJoinNodes(joinNode, flipped, distributionType, _ -> true);
+            return getPossibleJoinNodes(joinNode, flipped, distributionType, stats, _ -> true);
         }
 
-        private List<JoinEnumerationResult> getPossibleJoinNodes(JoinNode joinNode, JoinNode flipped, DistributionType distributionType, Predicate<JoinNode> isAllowed)
+        private List<JoinEnumerationResult> getPossibleJoinNodes(JoinNode joinNode, JoinNode flipped, DistributionType distributionType, PlanNodeStatsEstimate stats, Predicate<JoinNode> isAllowed)
         {
             ImmutableList.Builder<JoinEnumerationResult> results = ImmutableList.builder();
             for (JoinNode node : ImmutableList.of(joinNode.withDistributionType(distributionType), flipped.withDistributionType(distributionType))) {
                 if (isAllowed.test(node)) {
-                    results.add(createJoinEnumerationResult(node));
+                    results.add(createJoinEnumerationResult(node, stats));
                 }
             }
             return results.build();
         }
 
-        private JoinEnumerationResult createJoinEnumerationResult(JoinNode joinNode)
+        private JoinEnumerationResult createJoinEnumerationResult(JoinNode joinNode, PlanNodeStatsEstimate statsEstimate)
         {
+            statsProvider.registerStats(joinNode, statsEstimate);
             PlanCostEstimate costEstimate = costProvider.getCost(joinNode);
-            PlanNodeStatsEstimate statsEstimate = statsProvider.getStats(joinNode);
-            return JoinEnumerationResult.createJoinEnumerationResult(
-                    Optional.of(joinNode.withReorderJoinStatsAndCost(new PlanNodeStatsAndCostSummary(
-                            statsEstimate.getOutputRowCount(),
-                            statsEstimate.getOutputSizeInBytes(joinNode.getOutputSymbols()),
-                            costEstimate.getCpuCost(),
-                            costEstimate.getMaxMemory(),
-                            costEstimate.getNetworkCost()))),
-                    costEstimate);
+            JoinNode result = joinNode.withReorderJoinStatsAndCost(new PlanNodeStatsAndCostSummary(
+                    statsEstimate.getOutputRowCount(),
+                    statsEstimate.getOutputSizeInBytes(joinNode.getOutputSymbols()),
+                    costEstimate.getCpuCost(),
+                    costEstimate.getMaxMemory(),
+                    costEstimate.getNetworkCost()));
+            // the node that is handed back is a copy too, and whoever joins it next asks for its stats
+            statsProvider.registerStats(result, statsEstimate);
+            return JoinEnumerationResult.createJoinEnumerationResult(Optional.of(result), costEstimate);
         }
 
         private JoinEnumerationResult createJoinEnumerationResult(PlanNode planNode)

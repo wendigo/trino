@@ -97,6 +97,19 @@ public final class CachingStatsProvider
         }
     }
 
+    @Override
+    public void registerStats(PlanNode node, PlanNodeStatsEstimate stats)
+    {
+        requireNonNull(node, "node is null");
+        requireNonNull(stats, "stats is null");
+
+        if (!isEnableStatsCalculator(session) || node instanceof GroupReference) {
+            return;
+        }
+
+        cache.putIfAbsent(node, stats);
+    }
+
     private PlanNodeStatsEstimate getGroupStats(GroupReference groupReference)
     {
         int group = groupReference.getGroupId();

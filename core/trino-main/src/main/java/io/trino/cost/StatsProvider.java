@@ -18,4 +18,12 @@ import io.trino.sql.planner.plan.PlanNode;
 public interface StatsProvider
 {
     PlanNodeStatsEstimate getStats(PlanNode node);
+
+    /**
+     * Offers an estimate a caller has already computed for a node this provider has not seen, so
+     * that a later {@link #getStats} does not compute it again. Only ever an optimization: an
+     * implementation is free to ignore it, and a caller must offer the same estimate the provider
+     * would have produced itself.
+     */
+    default void registerStats(PlanNode node, PlanNodeStatsEstimate stats) {}
 }
