@@ -196,32 +196,6 @@ public class EqualityInference
      */
     public EqualityPartition generateEqualitiesPartitionedBy(Set<Symbol> scope)
     {
-        return generateEqualitiesPartitionedBy(scope, true, true, true);
-    }
-
-    /**
-     * The equalities that fit entirely within the symbol scope. Working out where the expressions
-     * outside the scope belong is most of the work, so callers that do not need it should say so.
-     */
-    public List<Expression> generateScopeEqualities(Set<Symbol> scope)
-    {
-        return generateEqualitiesPartitionedBy(scope, true, false, false).scopeEqualities();
-    }
-
-    /**
-     * The equalities that straddle the symbol scope.
-     */
-    public List<Expression> generateScopeStraddlingEqualities(Set<Symbol> scope)
-    {
-        return generateEqualitiesPartitionedBy(scope, false, false, true).scopeStraddlingEqualities();
-    }
-
-    private EqualityPartition generateEqualitiesPartitionedBy(Set<Symbol> scope, boolean withinScope, boolean outsideScope, boolean straddling)
-    {
-        // an expression only has to be placed on a side of the scope that something asked about
-        boolean placeWithinScope = withinScope || straddling;
-        boolean placeOutsideScope = outsideScope || straddling;
-
         ImmutableSet.Builder<Expression> scopeEqualities = ImmutableSet.builder();
         ImmutableSet.Builder<Expression> scopeComplementEqualities = ImmutableSet.builder();
         ImmutableSet.Builder<Expression> scopeStraddlingEqualities = ImmutableSet.builder();
@@ -236,36 +210,32 @@ public class EqualityInference
                 if (derivedExpressions.contains(candidate)) {
                     continue;
                 }
-                Expression scopeRewritten = placeWithinScope ? rewrite(candidate, scope::contains, false) : null;
+                Expression scopeRewritten = rewrite(candidate, scope::contains, false);
                 if (scopeRewritten != null) {
                     scopeExpressions.add(scopeRewritten);
                 }
-                Expression scopeComplementRewritten = placeOutsideScope ? rewrite(candidate, symbol -> !scope.contains(symbol), false) : null;
+                Expression scopeComplementRewritten = rewrite(candidate, symbol -> !scope.contains(symbol), false);
                 if (scopeComplementRewritten != null) {
                     scopeComplementExpressions.add(scopeComplementRewritten);
                 }
-                if (straddling && scopeRewritten == null && scopeComplementRewritten == null) {
+                if (scopeRewritten == null && scopeComplementRewritten == null) {
                     scopeStraddlingExpressions.add(candidate);
                 }
             }
             // Compile the equality expressions on each side of the scope
             Expression matchingCanonical = getCanonical(scopeExpressions);
-            if (withinScope && scopeExpressions.size() >= 2) {
+            if (scopeExpressions.size() >= 2) {
                 scopeExpressions.stream()
                         .filter(expression -> !expression.equals(matchingCanonical))
                         .map(expression -> comparison(metadata, charVarcharCoercion, ComparisonOperator.EQUAL, matchingCanonical, expression))
                         .forEach(scopeEqualities::add);
             }
             Expression complementCanonical = getCanonical(scopeComplementExpressions);
-            if (outsideScope && scopeComplementExpressions.size() >= 2) {
+            if (scopeComplementExpressions.size() >= 2) {
                 scopeComplementExpressions.stream()
                         .filter(expression -> !expression.equals(complementCanonical))
                         .map(expression -> comparison(metadata, charVarcharCoercion, ComparisonOperator.EQUAL, complementCanonical, expression))
                         .forEach(scopeComplementEqualities::add);
-            }
-
-            if (!straddling) {
-                continue;
             }
 
             // Compile single equality between matching and complement scope.
@@ -299,6 +269,35 @@ public class EqualityInference
         }
 
         return new EqualityPartition(scopeEqualities.build().asList(), scopeComplementEqualities.build().asList(), scopeStraddlingEqualities.build().asList());
+    }
+
+    /**
+     * The equalities that fit entirely within the symbol scope.
+     */
+    public List<Expression> generateScopeEqualities(Set<Symbol> scope)
+    {
+        ImmutableList.Builder<Expression> equalities = ImmutableList.builder();
+        for (Collection<Expression> equalitySet : equalitySets.asMap().values()) {
+            Set<Expression> scopeExpressions = new LinkedHashSet<>();
+            for (Expression candidate : equalitySet) {
+                if (!derivedExpressions.contains(candidate)) {
+                    Expression rewritten = rewrite(candidate, scope::contains, false);
+                    if (rewritten != null) {
+                        scopeExpressions.add(rewritten);
+                    }
+                }
+            }
+            if (scopeExpressions.size() < 2) {
+                continue;
+            }
+            Expression canonical = getCanonical(scopeExpressions);
+            for (Expression expression : scopeExpressions) {
+                if (!expression.equals(canonical)) {
+                    equalities.add(comparison(metadata, charVarcharCoercion, ComparisonOperator.EQUAL, canonical, expression));
+                }
+            }
+        }
+        return equalities.build();
     }
 
     /**
@@ -342,8 +341,7 @@ public class EqualityInference
         // Perform a naive single-pass traversal to try to rewrite non-compliant portions of the tree. Prefers to replace
         // larger subtrees over smaller subtrees
         // TODO: this rewrite can probably be made more sophisticated
-        // With nothing to substitute the traversal cannot change anything, and a plain reference
-        // never has anything to substitute, so skipping it matters
+        // no substitution leaves the expression as it is
         Expression rewritten = expressionRemap == null ? expression : replaceExpression(expression, expressionRemap);
         if (!isScoped(rewritten, symbolScope)) {
             // If the rewritten is still not compliant with the symbol scope, just give up

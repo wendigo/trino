@@ -395,9 +395,7 @@ public class TestJoinStatsRule
     }
 
     /**
-     * {@link io.trino.sql.planner.iterative.rule.ReorderJoins} derives the estimate of a candidate
-     * join once and hands it to the copies that differ only in distribution type and in which side
-     * is the build one. That is only sound while this rule ignores both, so it is asserted here.
+     * Flipped and re-distributed copies of an inner join get the same estimate.
      */
     @Test
     public void testStatsDoNotDependOnDistributionTypeOrBuildSide()

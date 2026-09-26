@@ -166,8 +166,7 @@ public class TestJoinEnumerator
         Symbol c = p.symbol("C", BIGINT);
         List<PlanNode> sources = ImmutableList.of(p.values(a), p.values(b), p.values(c));
 
-        // a = b together with -a = c lets the inference derive -b = c, so a join order that
-        // starts from the sources of b and c must stay reachable: all three must be connected
+        // a = b together with -a = c lets the inference derive -b = c, connecting all three sources
         long[] graph = buildJoinGraph(sources, new EqualityInference(
                 planTester.getPlannerContext(),
                 CHAR_VARCHAR_COERCION,
