@@ -51,12 +51,27 @@ public abstract class AbstractVariableWidthType
     // to shift the sign bit to the beginning
     private static final VarHandle INT_BE_HANDLE = MethodHandles.byteArrayViewVarHandle(int[].class, ByteOrder.BIG_ENDIAN);
 
-    private static final int MAX_SHORT_FLAT_LENGTH = 3;
+    static final int MAX_SHORT_FLAT_LENGTH = 3;
 
     protected static final int EXPECTED_BYTES_PER_ENTRY = 32;
-    protected static final TypeOperatorDeclaration DEFAULT_READ_OPERATORS = extractOperatorDeclaration(DefaultReadOperators.class, lookup(), Slice.class);
-    protected static final TypeOperatorDeclaration DEFAULT_COMPARABLE_OPERATORS = extractOperatorDeclaration(DefaultComparableOperators.class, lookup(), Slice.class);
-    protected static final TypeOperatorDeclaration DEFAULT_ORDERING_OPERATORS = extractOperatorDeclaration(DefaultOrderingOperators.class, lookup(), Slice.class);
+
+    // Operators on stack values and the flat format, which do not depend on the value block type
+    static final TypeOperatorDeclaration SLICE_READ_OPERATORS = extractOperatorDeclaration(SliceReadOperators.class, lookup(), Slice.class);
+    static final TypeOperatorDeclaration SLICE_COMPARABLE_OPERATORS = extractOperatorDeclaration(SliceComparableOperators.class, lookup(), Slice.class);
+    static final TypeOperatorDeclaration SLICE_ORDERING_OPERATORS = extractOperatorDeclaration(SliceOrderingOperators.class, lookup(), Slice.class);
+
+    protected static final TypeOperatorDeclaration DEFAULT_READ_OPERATORS = TypeOperatorDeclaration.builder(Slice.class)
+            .addOperators(SLICE_READ_OPERATORS)
+            .addOperators(extractOperatorDeclaration(DefaultReadOperators.class, lookup(), Slice.class))
+            .build();
+    protected static final TypeOperatorDeclaration DEFAULT_COMPARABLE_OPERATORS = TypeOperatorDeclaration.builder(Slice.class)
+            .addOperators(SLICE_COMPARABLE_OPERATORS)
+            .addOperators(extractOperatorDeclaration(DefaultComparableOperators.class, lookup(), Slice.class))
+            .build();
+    protected static final TypeOperatorDeclaration DEFAULT_ORDERING_OPERATORS = TypeOperatorDeclaration.builder(Slice.class)
+            .addOperators(SLICE_ORDERING_OPERATORS)
+            .addOperators(extractOperatorDeclaration(DefaultOrderingOperators.class, lookup(), Slice.class))
+            .build();
 
     protected AbstractVariableWidthType(TypeDescriptor descriptor, Class<?> javaType)
     {
@@ -153,7 +168,7 @@ public abstract class AbstractVariableWidthType
         }
     }
 
-    private static class DefaultReadOperators
+    private static class SliceReadOperators
     {
         @ScalarOperator(READ_VALUE)
         private static Slice readFlatToStack(
@@ -177,28 +192,6 @@ public abstract class AbstractVariableWidthType
         }
 
         @ScalarOperator(READ_VALUE)
-        private static void readFlatToBlock(
-                @FlatFixed byte[] fixedSizeSlice,
-                @FlatFixedOffset int fixedSizeOffset,
-                @FlatVariableWidth byte[] variableSizeSlice,
-                @FlatVariableOffset int variableSizeOffset,
-                BlockBuilder blockBuilder)
-        {
-            int length = readVariableWidthLength(fixedSizeSlice, fixedSizeOffset);
-            byte[] bytes;
-            int offset;
-            if (length <= MAX_SHORT_FLAT_LENGTH) {
-                bytes = fixedSizeSlice;
-                offset = fixedSizeOffset + 1;
-            }
-            else {
-                bytes = variableSizeSlice;
-                offset = variableSizeOffset;
-            }
-            ((VariableWidthBlockBuilder) blockBuilder).writeEntry(bytes, offset, length);
-        }
-
-        @ScalarOperator(READ_VALUE)
         private static void writeFlatFromStack(
                 Slice value,
                 @FlatFixed byte[] fixedSizeSlice,
@@ -219,6 +212,31 @@ public abstract class AbstractVariableWidthType
                 offset = variableSizeOffset;
             }
             value.getBytes(0, bytes, offset, length);
+        }
+    }
+
+    private static class DefaultReadOperators
+    {
+        @ScalarOperator(READ_VALUE)
+        private static void readFlatToBlock(
+                @FlatFixed byte[] fixedSizeSlice,
+                @FlatFixedOffset int fixedSizeOffset,
+                @FlatVariableWidth byte[] variableSizeSlice,
+                @FlatVariableOffset int variableSizeOffset,
+                BlockBuilder blockBuilder)
+        {
+            int length = readVariableWidthLength(fixedSizeSlice, fixedSizeOffset);
+            byte[] bytes;
+            int offset;
+            if (length <= MAX_SHORT_FLAT_LENGTH) {
+                bytes = fixedSizeSlice;
+                offset = fixedSizeOffset + 1;
+            }
+            else {
+                bytes = variableSizeSlice;
+                offset = variableSizeOffset;
+            }
+            ((VariableWidthBlockBuilder) blockBuilder).writeEntry(bytes, offset, length);
         }
 
         @ScalarOperator(READ_VALUE)
@@ -249,42 +267,12 @@ public abstract class AbstractVariableWidthType
         }
     }
 
-    private static class DefaultComparableOperators
+    private static class SliceComparableOperators
     {
         @ScalarOperator(EQUAL)
         private static boolean equalOperator(Slice left, Slice right)
         {
             return left.equals(right);
-        }
-
-        @ScalarOperator(EQUAL)
-        private static boolean equalOperator(@BlockPosition VariableWidthBlock leftBlock, @BlockIndex int leftPosition, @BlockPosition VariableWidthBlock rightBlock, @BlockIndex int rightPosition)
-        {
-            Slice leftRawSlice = leftBlock.getRawSlice();
-            int leftRawSliceOffset = leftBlock.getRawSliceOffset(leftPosition);
-            int leftLength = leftBlock.getSliceLength(leftPosition);
-
-            Slice rightRawSlice = rightBlock.getRawSlice();
-            int rightRawSliceOffset = rightBlock.getRawSliceOffset(rightPosition);
-            int rightLength = rightBlock.getSliceLength(rightPosition);
-
-            return leftRawSlice.equals(leftRawSliceOffset, leftLength, rightRawSlice, rightRawSliceOffset, rightLength);
-        }
-
-        @ScalarOperator(EQUAL)
-        private static boolean equalOperator(Slice left, @BlockPosition VariableWidthBlock rightBlock, @BlockIndex int rightPosition)
-        {
-            return equalOperator(rightBlock, rightPosition, left);
-        }
-
-        @ScalarOperator(EQUAL)
-        private static boolean equalOperator(@BlockPosition VariableWidthBlock leftBlock, @BlockIndex int leftPosition, Slice right)
-        {
-            Slice leftRawSlice = leftBlock.getRawSlice();
-            int leftRawSliceOffset = leftBlock.getRawSliceOffset(leftPosition);
-            int leftLength = leftBlock.getSliceLength(leftPosition);
-
-            return leftRawSlice.equals(leftRawSliceOffset, leftLength, right, 0, right.length());
         }
 
         @ScalarOperator(EQUAL)
@@ -314,6 +302,66 @@ public abstract class AbstractVariableWidthType
                     rightVariableSizeSlice,
                     rightVariableSizeOffset,
                     rightVariableSizeOffset + rightLength);
+        }
+
+        @ScalarOperator(XX_HASH_64)
+        private static long xxHash64Operator(Slice value)
+        {
+            return XxHash64.hash(value);
+        }
+
+        @ScalarOperator(XX_HASH_64)
+        private static long xxHash64Operator(
+                @FlatFixed byte[] fixedSizeSlice,
+                @FlatFixedOffset int fixedSizeOffset,
+                @FlatVariableWidth byte[] variableSizeSlice,
+                @FlatVariableOffset int variableSizeOffset)
+        {
+            int length = readVariableWidthLength(fixedSizeSlice, fixedSizeOffset);
+            byte[] bytes;
+            int offset;
+            if (length <= MAX_SHORT_FLAT_LENGTH) {
+                bytes = fixedSizeSlice;
+                offset = fixedSizeOffset + 1;
+            }
+            else {
+                bytes = variableSizeSlice;
+                offset = variableSizeOffset;
+            }
+            return XxHash64.hash(bytes, offset, length);
+        }
+    }
+
+    private static class DefaultComparableOperators
+    {
+        @ScalarOperator(EQUAL)
+        private static boolean equalOperator(@BlockPosition VariableWidthBlock leftBlock, @BlockIndex int leftPosition, @BlockPosition VariableWidthBlock rightBlock, @BlockIndex int rightPosition)
+        {
+            Slice leftRawSlice = leftBlock.getRawSlice();
+            int leftRawSliceOffset = leftBlock.getRawSliceOffset(leftPosition);
+            int leftLength = leftBlock.getSliceLength(leftPosition);
+
+            Slice rightRawSlice = rightBlock.getRawSlice();
+            int rightRawSliceOffset = rightBlock.getRawSliceOffset(rightPosition);
+            int rightLength = rightBlock.getSliceLength(rightPosition);
+
+            return leftRawSlice.equals(leftRawSliceOffset, leftLength, rightRawSlice, rightRawSliceOffset, rightLength);
+        }
+
+        @ScalarOperator(EQUAL)
+        private static boolean equalOperator(Slice left, @BlockPosition VariableWidthBlock rightBlock, @BlockIndex int rightPosition)
+        {
+            return equalOperator(rightBlock, rightPosition, left);
+        }
+
+        @ScalarOperator(EQUAL)
+        private static boolean equalOperator(@BlockPosition VariableWidthBlock leftBlock, @BlockIndex int leftPosition, Slice right)
+        {
+            Slice leftRawSlice = leftBlock.getRawSlice();
+            int leftRawSliceOffset = leftBlock.getRawSliceOffset(leftPosition);
+            int leftLength = leftBlock.getSliceLength(leftPosition);
+
+            return leftRawSlice.equals(leftRawSliceOffset, leftLength, right, 0, right.length());
         }
 
         @ScalarOperator(EQUAL)
@@ -367,47 +415,23 @@ public abstract class AbstractVariableWidthType
         }
 
         @ScalarOperator(XX_HASH_64)
-        private static long xxHash64Operator(Slice value)
-        {
-            return XxHash64.hash(value);
-        }
-
-        @ScalarOperator(XX_HASH_64)
         private static long xxHash64Operator(@BlockPosition VariableWidthBlock block, @BlockIndex int position)
         {
             return XxHash64.hash(block.getRawSlice(), block.getRawSliceOffset(position), block.getSliceLength(position));
         }
-
-        @ScalarOperator(XX_HASH_64)
-        private static long xxHash64Operator(
-                @FlatFixed byte[] fixedSizeSlice,
-                @FlatFixedOffset int fixedSizeOffset,
-                @FlatVariableWidth byte[] variableSizeSlice,
-                @FlatVariableOffset int variableSizeOffset)
-        {
-            int length = readVariableWidthLength(fixedSizeSlice, fixedSizeOffset);
-            byte[] bytes;
-            int offset;
-            if (length <= MAX_SHORT_FLAT_LENGTH) {
-                bytes = fixedSizeSlice;
-                offset = fixedSizeOffset + 1;
-            }
-            else {
-                bytes = variableSizeSlice;
-                offset = variableSizeOffset;
-            }
-            return XxHash64.hash(bytes, offset, length);
-        }
     }
 
-    private static class DefaultOrderingOperators
+    private static class SliceOrderingOperators
     {
         @ScalarOperator(COMPARISON_UNORDERED_LAST)
         private static long comparisonOperator(Slice left, Slice right)
         {
             return left.compareTo(right);
         }
+    }
 
+    private static class DefaultOrderingOperators
+    {
         @ScalarOperator(COMPARISON_UNORDERED_LAST)
         private static long comparisonOperator(@BlockPosition VariableWidthBlock leftBlock, @BlockIndex int leftPosition, @BlockPosition VariableWidthBlock rightBlock, @BlockIndex int rightPosition)
         {

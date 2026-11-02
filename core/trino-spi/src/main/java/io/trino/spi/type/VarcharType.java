@@ -19,32 +19,57 @@ import io.airlift.slice.Slices;
 import io.trino.spi.block.Block;
 import io.trino.spi.block.BlockBuilder;
 import io.trino.spi.block.BlockBuilderStatus;
-import io.trino.spi.block.VariableWidthBlock;
-import io.trino.spi.block.VariableWidthBlockBuilder;
+import io.trino.spi.block.PageBuilderStatus;
+import io.trino.spi.block.VariableWidthViewBlock;
+import io.trino.spi.block.VariableWidthViewBlockBuilder;
+import io.trino.spi.function.BlockIndex;
+import io.trino.spi.function.BlockPosition;
+import io.trino.spi.function.FlatFixed;
+import io.trino.spi.function.FlatFixedOffset;
+import io.trino.spi.function.FlatVariableOffset;
+import io.trino.spi.function.FlatVariableWidth;
+import io.trino.spi.function.ScalarOperator;
 
 import java.util.Arrays;
 import java.util.Optional;
 
 import static io.airlift.slice.SliceUtf8.countCodePoints;
 import static io.airlift.slice.SliceUtf8.fromCodePoints;
+import static io.trino.spi.function.OperatorType.COMPARISON_UNORDERED_LAST;
+import static io.trino.spi.function.OperatorType.EQUAL;
+import static io.trino.spi.function.OperatorType.READ_VALUE;
+import static io.trino.spi.function.OperatorType.XX_HASH_64;
+import static io.trino.spi.type.AbstractVariableWidthType.MAX_SHORT_FLAT_LENGTH;
+import static io.trino.spi.type.AbstractVariableWidthType.SLICE_COMPARABLE_OPERATORS;
+import static io.trino.spi.type.AbstractVariableWidthType.SLICE_ORDERING_OPERATORS;
+import static io.trino.spi.type.AbstractVariableWidthType.SLICE_READ_OPERATORS;
+import static io.trino.spi.type.AbstractVariableWidthType.readVariableWidthLength;
+import static io.trino.spi.type.AbstractVariableWidthType.writeFlatVariableLength;
 import static io.trino.spi.type.CodePoints.nextCodePoint;
 import static io.trino.spi.type.CodePoints.previousCodePoint;
 import static io.trino.spi.type.CodePoints.tryCodePoints;
 import static io.trino.spi.type.Slices.sliceRepresentation;
+import static io.trino.spi.type.TypeOperatorDeclaration.extractOperatorDeclaration;
 import static java.lang.Character.MAX_CODE_POINT;
 import static java.lang.Character.MIN_CODE_POINT;
+import static java.lang.Math.min;
 import static java.lang.String.format;
+import static java.lang.invoke.MethodHandles.lookup;
 import static java.util.Collections.singletonList;
 
 public final class VarcharType
-        extends AbstractVariableWidthType
+        extends AbstractType
+        implements VariableWidthType
 {
     public static final String NAME = "varchar";
 
+    private static final int EXPECTED_BYTES_PER_ENTRY = 32;
+
     private static final TypeOperatorDeclaration TYPE_OPERATOR_DECLARATION = TypeOperatorDeclaration.builder(Slice.class)
-            .addOperators(DEFAULT_READ_OPERATORS)
-            .addOperators(DEFAULT_COMPARABLE_OPERATORS)
-            .addOperators(DEFAULT_ORDERING_OPERATORS)
+            .addOperators(SLICE_READ_OPERATORS)
+            .addOperators(SLICE_COMPARABLE_OPERATORS)
+            .addOperators(SLICE_ORDERING_OPERATORS)
+            .addOperators(extractOperatorDeclaration(BlockOperators.class, lookup(), Slice.class))
             .build();
 
     public static final int UNBOUNDED_LENGTH = Integer.MAX_VALUE;
@@ -91,7 +116,8 @@ public final class VarcharType
                 new TypeDescriptor(
                         NAME,
                         singletonList(TypeParameter.numericParameter(length))),
-                Slice.class);
+                Slice.class,
+                VariableWidthViewBlock.class);
 
         if (length < 0) {
             throw new IllegalArgumentException("Invalid VARCHAR length " + length);
@@ -159,7 +185,26 @@ public final class VarcharType
     }
 
     @Override
-    public VariableWidthBlockBuilder createBlockBuilder(BlockBuilderStatus blockBuilderStatus, int expectedEntries)
+    public VariableWidthViewBlockBuilder createBlockBuilder(BlockBuilderStatus blockBuilderStatus, int expectedEntries, int expectedBytesPerEntry)
+    {
+        int maxBlockSizeInBytes;
+        if (blockBuilderStatus == null) {
+            maxBlockSizeInBytes = PageBuilderStatus.DEFAULT_MAX_PAGE_SIZE_IN_BYTES;
+        }
+        else {
+            maxBlockSizeInBytes = blockBuilderStatus.getMaxPageSizeInBytes();
+        }
+
+        // it is guaranteed Math.min will not overflow; safe to cast
+        int expectedBytes = (int) min((long) expectedEntries * expectedBytesPerEntry, maxBlockSizeInBytes);
+        return new VariableWidthViewBlockBuilder(
+                blockBuilderStatus,
+                expectedBytesPerEntry == 0 ? expectedEntries : min(expectedEntries, maxBlockSizeInBytes / expectedBytesPerEntry),
+                expectedBytes);
+    }
+
+    @Override
+    public VariableWidthViewBlockBuilder createBlockBuilder(BlockBuilderStatus blockBuilderStatus, int expectedEntries)
     {
         return createBlockBuilder(
                 blockBuilderStatus,
@@ -169,6 +214,39 @@ public final class VarcharType
                         // The data can take up to 4 bytes per character due to UTF-8 encoding, but we assume it is ASCII and only needs one byte.
                         .map(length -> Math.min(length, EXPECTED_BYTES_PER_ENTRY))
                         .orElse(EXPECTED_BYTES_PER_ENTRY));
+    }
+
+    @Override
+    public int getFlatFixedSize()
+    {
+        return Integer.BYTES;
+    }
+
+    @Override
+    public boolean isFlatVariableWidth()
+    {
+        return true;
+    }
+
+    @Override
+    public int getFlatVariableWidthSize(Block block, int position)
+    {
+        VariableWidthViewBlock valueBlock = (VariableWidthViewBlock) block.getUnderlyingValueBlock();
+        int length = valueBlock.getSliceLength(block.getUnderlyingValuePosition(position));
+        if (length <= MAX_SHORT_FLAT_LENGTH) {
+            return 0;
+        }
+        return length;
+    }
+
+    @Override
+    public int getFlatVariableWidthLength(byte[] fixedSizeSlice, int fixedSizeOffset)
+    {
+        int length = readVariableWidthLength(fixedSizeSlice, fixedSizeOffset);
+        if (length <= MAX_SHORT_FLAT_LENGTH) {
+            return 0;
+        }
+        return length;
     }
 
     @Override
@@ -253,7 +331,7 @@ public final class VarcharType
     @Override
     public Slice getSlice(Block block, int position)
     {
-        VariableWidthBlock valueBlock = (VariableWidthBlock) block.getUnderlyingValueBlock();
+        VariableWidthViewBlock valueBlock = (VariableWidthViewBlock) block.getUnderlyingValueBlock();
         int valuePosition = block.getUnderlyingValuePosition(position);
         return valueBlock.getSlice(valuePosition);
     }
@@ -272,7 +350,7 @@ public final class VarcharType
     @Override
     public void writeSlice(BlockBuilder blockBuilder, Slice value, int offset, int length)
     {
-        ((VariableWidthBlockBuilder) blockBuilder).writeEntry(value, offset, length);
+        ((VariableWidthViewBlockBuilder) blockBuilder).writeEntry(value, offset, length);
     }
 
     @Override
@@ -293,5 +371,121 @@ public final class VarcharType
     public int hashCode()
     {
         return (length * 31) + getClass().hashCode();
+    }
+
+    private static class BlockOperators
+    {
+        @ScalarOperator(READ_VALUE)
+        private static void readFlatToBlock(
+                @FlatFixed byte[] fixedSizeSlice,
+                @FlatFixedOffset int fixedSizeOffset,
+                @FlatVariableWidth byte[] variableSizeSlice,
+                @FlatVariableOffset int variableSizeOffset,
+                BlockBuilder blockBuilder)
+        {
+            int length = readVariableWidthLength(fixedSizeSlice, fixedSizeOffset);
+            if (length <= MAX_SHORT_FLAT_LENGTH) {
+                ((VariableWidthViewBlockBuilder) blockBuilder).writeEntry(fixedSizeSlice, fixedSizeOffset + 1, length);
+            }
+            else {
+                ((VariableWidthViewBlockBuilder) blockBuilder).writeEntry(variableSizeSlice, variableSizeOffset, length);
+            }
+        }
+
+        @ScalarOperator(READ_VALUE)
+        private static void writeFlatFromBlock(
+                @BlockPosition VariableWidthViewBlock block,
+                @BlockIndex int position,
+                @FlatFixed byte[] fixedSizeSlice,
+                @FlatFixedOffset int fixedSizeOffset,
+                @FlatVariableWidth byte[] variableSizeSlice,
+                @FlatVariableOffset int variableSizeOffset)
+        {
+            int length = block.getSliceLength(position);
+            writeFlatVariableLength(length, fixedSizeSlice, fixedSizeOffset);
+            if (length <= MAX_SHORT_FLAT_LENGTH) {
+                block.getValueBytes(position, fixedSizeSlice, fixedSizeOffset + 1);
+            }
+            else {
+                block.getValueBytes(position, variableSizeSlice, variableSizeOffset);
+            }
+        }
+
+        @ScalarOperator(EQUAL)
+        private static boolean equalOperator(@BlockPosition VariableWidthViewBlock leftBlock, @BlockIndex int leftPosition, @BlockPosition VariableWidthViewBlock rightBlock, @BlockIndex int rightPosition)
+        {
+            return leftBlock.valueEquals(leftPosition, rightBlock, rightPosition);
+        }
+
+        @ScalarOperator(EQUAL)
+        private static boolean equalOperator(Slice left, @BlockPosition VariableWidthViewBlock rightBlock, @BlockIndex int rightPosition)
+        {
+            return rightBlock.valueEquals(rightPosition, left);
+        }
+
+        @ScalarOperator(EQUAL)
+        private static boolean equalOperator(@BlockPosition VariableWidthViewBlock leftBlock, @BlockIndex int leftPosition, Slice right)
+        {
+            return leftBlock.valueEquals(leftPosition, right);
+        }
+
+        @ScalarOperator(EQUAL)
+        private static boolean equalOperator(
+                @BlockPosition VariableWidthViewBlock leftBlock,
+                @BlockIndex int leftPosition,
+                @FlatFixed byte[] rightFixedSizeSlice,
+                @FlatFixedOffset int rightFixedSizeOffset,
+                @FlatVariableWidth byte[] rightVariableSizeSlice,
+                @FlatVariableOffset int rightVariableSizeOffset)
+        {
+            return equalOperator(
+                    rightFixedSizeSlice,
+                    rightFixedSizeOffset,
+                    rightVariableSizeSlice,
+                    rightVariableSizeOffset,
+                    leftBlock,
+                    leftPosition);
+        }
+
+        @ScalarOperator(EQUAL)
+        private static boolean equalOperator(
+                @FlatFixed byte[] leftFixedSizeSlice,
+                @FlatFixedOffset int leftFixedSizeOffset,
+                @FlatVariableWidth byte[] leftVariableSizeSlice,
+                @FlatVariableOffset int leftVariableSizeOffset,
+                @BlockPosition VariableWidthViewBlock rightBlock,
+                @BlockIndex int rightPosition)
+        {
+            int leftLength = readVariableWidthLength(leftFixedSizeSlice, leftFixedSizeOffset);
+            if (leftLength <= MAX_SHORT_FLAT_LENGTH) {
+                return rightBlock.valueEquals(rightPosition, leftFixedSizeSlice, leftFixedSizeOffset + 1, leftLength);
+            }
+            return rightBlock.valueEquals(rightPosition, leftVariableSizeSlice, leftVariableSizeOffset, leftLength);
+        }
+
+        @ScalarOperator(XX_HASH_64)
+        private static long xxHash64Operator(@BlockPosition VariableWidthViewBlock block, @BlockIndex int position)
+        {
+            return block.hashValue(position);
+        }
+
+        @ScalarOperator(COMPARISON_UNORDERED_LAST)
+        private static long comparisonOperator(@BlockPosition VariableWidthViewBlock leftBlock, @BlockIndex int leftPosition, @BlockPosition VariableWidthViewBlock rightBlock, @BlockIndex int rightPosition)
+        {
+            return leftBlock.compareValue(leftPosition, rightBlock, rightPosition);
+        }
+
+        @ScalarOperator(COMPARISON_UNORDERED_LAST)
+        private static long comparisonOperator(@BlockPosition VariableWidthViewBlock leftBlock, @BlockIndex int leftPosition, Slice right)
+        {
+            return leftBlock.compareValue(leftPosition, right);
+        }
+
+        @ScalarOperator(COMPARISON_UNORDERED_LAST)
+        private static long comparisonOperator(Slice left, @BlockPosition VariableWidthViewBlock rightBlock, @BlockIndex int rightPosition)
+        {
+            // compareValue returns -1, 0, 1 or a difference of two lengths, so negation cannot overflow
+            return -rightBlock.compareValue(rightPosition, left);
+        }
     }
 }

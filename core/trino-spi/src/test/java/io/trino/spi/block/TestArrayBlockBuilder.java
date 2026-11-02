@@ -171,7 +171,7 @@ final class TestArrayBlockBuilder
     @Override
     protected BlockBuilder createBlockBuilder()
     {
-        return new ArrayBlockBuilder(new VariableWidthBlockBuilder(null, 1, 100), null, 1);
+        return new ArrayBlockBuilder(new VariableWidthViewBlockBuilder(null, 1, 100), null, 1);
     }
 
     @Override
@@ -194,7 +194,7 @@ final class TestArrayBlockBuilder
     @Override
     protected ValueBlock blockFromValues(Iterable<List<String>> values)
     {
-        ArrayBlockBuilder blockBuilder = new ArrayBlockBuilder(new VariableWidthBlockBuilder(null, 1, 100), null, 1);
+        ArrayBlockBuilder blockBuilder = new ArrayBlockBuilder(new VariableWidthViewBlockBuilder(null, 1, 100), null, 1);
         for (List<String> array : values) {
             if (array == null) {
                 blockBuilder.appendNull();

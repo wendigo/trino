@@ -27,7 +27,7 @@ import static io.airlift.slice.SizeOf.sizeOf;
 import static io.airlift.slice.Slices.EMPTY_SLICE;
 import static io.airlift.slice.Slices.utf8Slice;
 import static io.trino.spi.block.BlockUtil.MAX_ARRAY_SIZE;
-import static io.trino.spi.type.VarcharType.VARCHAR;
+import static io.trino.spi.type.VarbinaryType.VARBINARY;
 import static java.lang.Math.ceil;
 import static java.util.Collections.nCopies;
 import static org.assertj.core.api.Assertions.assertThat;
@@ -37,14 +37,14 @@ final class TestVariableWidthBlockBuilder
         extends AbstractTestBlockBuilder<String>
 {
     private static final int BLOCK_BUILDER_INSTANCE_SIZE = instanceSize(VariableWidthBlockBuilder.class);
-    private static final int VARCHAR_VALUE_SIZE = 7;
-    private static final int VARCHAR_ENTRY_SIZE = SIZE_OF_INT + VARCHAR_VALUE_SIZE;
+    private static final int VALUE_SIZE = 7;
+    private static final int ENTRY_SIZE = SIZE_OF_INT + VALUE_SIZE;
     private static final int EXPECTED_ENTRY_COUNT = 3;
 
     @Test
     public void testFixedBlockIsFull()
     {
-        testIsFull(PageBuilder.withMaxPageSize(VARCHAR_ENTRY_SIZE * EXPECTED_ENTRY_COUNT, ImmutableList.of(VARCHAR)));
+        testIsFull(PageBuilder.withMaxPageSize(ENTRY_SIZE * EXPECTED_ENTRY_COUNT, ImmutableList.of(VARBINARY)));
     }
 
     @Test
@@ -138,7 +138,7 @@ final class TestVariableWidthBlockBuilder
         assertThat(pageBuilder.isEmpty()).isTrue();
         while (!pageBuilder.isFull()) {
             pageBuilder.declarePosition();
-            VARCHAR.writeSlice(blockBuilder, Slices.allocate(VARCHAR_VALUE_SIZE));
+            VARBINARY.writeSlice(blockBuilder, Slices.allocate(VALUE_SIZE));
         }
         assertThat(blockBuilder.getPositionCount()).isEqualTo(EXPECTED_ENTRY_COUNT);
         assertThat(pageBuilder.isFull()).isEqualTo(true);
@@ -161,7 +161,7 @@ final class TestVariableWidthBlockBuilder
     public void testAppendRepeatedEmpty()
     {
         VariableWidthBlockBuilder blockBuilder = new VariableWidthBlockBuilder(null, 1, 100);
-        ValueBlock value = VARCHAR.createBlockBuilder(null, 1)
+        ValueBlock value = VARBINARY.createBlockBuilder(null, 1)
                 .writeEntry(utf8Slice("ignored"))
                 .writeEntry(Slices.EMPTY_SLICE)
                 .writeEntry(utf8Slice("ignored"))
@@ -176,7 +176,7 @@ final class TestVariableWidthBlockBuilder
     public void testAppendRepeatedSingle()
     {
         VariableWidthBlockBuilder blockBuilder = new VariableWidthBlockBuilder(null, 1, 100);
-        VariableWidthBlock value = VARCHAR.createBlockBuilder(null, 1)
+        VariableWidthBlock value = VARBINARY.createBlockBuilder(null, 1)
                 .writeEntry(utf8Slice("ignored"))
                 .writeEntry(utf8Slice("ab"))
                 .writeEntry(utf8Slice("ignored"))
@@ -191,7 +191,7 @@ final class TestVariableWidthBlockBuilder
     public void testAppendRepeated1Byte()
     {
         VariableWidthBlockBuilder blockBuilder = new VariableWidthBlockBuilder(null, 1, 100);
-        VariableWidthBlock value = VARCHAR.createBlockBuilder(null, 1)
+        VariableWidthBlock value = VARBINARY.createBlockBuilder(null, 1)
                 .writeEntry(utf8Slice("ignored"))
                 .writeEntry(utf8Slice("X"))
                 .writeEntry(utf8Slice("ignored"))
@@ -209,7 +209,7 @@ final class TestVariableWidthBlockBuilder
     public void testAppendRepeated2Bytes()
     {
         VariableWidthBlockBuilder blockBuilder = new VariableWidthBlockBuilder(null, 1, 100);
-        VariableWidthBlock value = VARCHAR.createBlockBuilder(null, 1)
+        VariableWidthBlock value = VARBINARY.createBlockBuilder(null, 1)
                 .writeEntry(utf8Slice("ignored"))
                 .writeEntry(utf8Slice("ab"))
                 .writeEntry(utf8Slice("ignored"))
@@ -226,7 +226,7 @@ final class TestVariableWidthBlockBuilder
     public void testAppendRepeatedMultipleBytesOddNumberOfTimes()
     {
         VariableWidthBlockBuilder blockBuilder = new VariableWidthBlockBuilder(null, 1, 100);
-        VariableWidthBlock value = VARCHAR.createBlockBuilder(null, 1)
+        VariableWidthBlock value = VARBINARY.createBlockBuilder(null, 1)
                 .writeEntry(utf8Slice("ignored"))
                 .writeEntry(utf8Slice("abc"))
                 .writeEntry(utf8Slice("ignored"))
@@ -241,7 +241,7 @@ final class TestVariableWidthBlockBuilder
     public void testAppendRepeatedMultipleBytesEvenNumberOfTimes()
     {
         VariableWidthBlockBuilder blockBuilder = new VariableWidthBlockBuilder(null, 1, 100);
-        VariableWidthBlock value = VARCHAR.createBlockBuilder(null, 1)
+        VariableWidthBlock value = VARBINARY.createBlockBuilder(null, 1)
                 .writeEntry(utf8Slice("ignored"))
                 .writeEntry(utf8Slice("abc"))
                 .writeEntry(utf8Slice("ignored"))
@@ -256,7 +256,7 @@ final class TestVariableWidthBlockBuilder
     public void testAppendRepeatedMultipleBytesPowerOf2NumberOfTimes()
     {
         VariableWidthBlockBuilder blockBuilder = new VariableWidthBlockBuilder(null, 1, 100);
-        VariableWidthBlock value = VARCHAR.createBlockBuilder(null, 1)
+        VariableWidthBlock value = VARBINARY.createBlockBuilder(null, 1)
                 .writeEntry(utf8Slice("ignored"))
                 .writeEntry(utf8Slice("abc"))
                 .writeEntry(utf8Slice("ignored"))
@@ -291,7 +291,7 @@ final class TestVariableWidthBlockBuilder
     {
         ImmutableList.Builder<String> list = ImmutableList.builder();
         for (int i = 0; i < block.getPositionCount(); i++) {
-            list.add(VARCHAR.getSlice(block, i).toStringUtf8());
+            list.add(VARBINARY.getSlice(block, i).toStringUtf8());
         }
         return list.build();
     }

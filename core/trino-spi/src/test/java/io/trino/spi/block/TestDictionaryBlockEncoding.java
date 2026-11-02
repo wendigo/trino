@@ -59,7 +59,7 @@ final class TestDictionaryBlockEncoding
         DictionaryBlock dictionaryBlock = (DictionaryBlock) DictionaryBlock.create(ids.length, dictionary, ids);
 
         Block actualBlock = roundTripBlock(dictionaryBlock);
-        assertThat(actualBlock).isInstanceOf(VariableWidthBlock.class);
+        assertThat(actualBlock).isInstanceOf(VariableWidthViewBlock.class);
         assertBlockEquals(VARCHAR, actualBlock, dictionary.getPositions(ids, 0, 3));
     }
 
@@ -70,7 +70,7 @@ final class TestDictionaryBlockEncoding
         DictionaryBlock dictionaryBlock = (DictionaryBlock) DictionaryBlock.create(ids.length, dictionary, ids);
 
         Block actualBlock = roundTripBlock(dictionaryBlock);
-        assertThat(actualBlock).isInstanceOf(VariableWidthBlock.class);
+        assertThat(actualBlock).isInstanceOf(VariableWidthViewBlock.class);
         assertBlockEquals(VARCHAR, actualBlock, dictionary.getPositions(ids, 0, 4));
     }
 

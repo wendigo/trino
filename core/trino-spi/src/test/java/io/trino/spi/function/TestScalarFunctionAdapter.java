@@ -25,6 +25,7 @@ import io.trino.spi.block.BlockBuilder;
 import io.trino.spi.block.Fixed12Block;
 import io.trino.spi.block.LongArrayBlock;
 import io.trino.spi.block.VariableWidthBlock;
+import io.trino.spi.block.VariableWidthViewBlock;
 import io.trino.spi.function.InvocationConvention.InvocationArgumentConvention;
 import io.trino.spi.function.InvocationConvention.InvocationReturnConvention;
 import io.trino.spi.type.ArrayType;
@@ -853,7 +854,7 @@ class TestScalarFunctionAdapter
         public boolean valueBlockPosition(
                 LongArrayBlock doubleBlock,
                 int doublePosition,
-                VariableWidthBlock sliceBlock,
+                VariableWidthViewBlock sliceBlock,
                 int slicePosition,
                 ArrayBlock blockBlock,
                 int blockPosition)
@@ -887,7 +888,7 @@ class TestScalarFunctionAdapter
 
         @SuppressWarnings("unused")
         public boolean valueBlockPositionObjects(
-                VariableWidthBlock sliceBlock,
+                VariableWidthViewBlock sliceBlock,
                 int slicePosition,
                 ArrayBlock blockBlock,
                 int blockPosition,

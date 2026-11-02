@@ -18,7 +18,8 @@ import org.junit.jupiter.api.Test;
 
 import java.util.Random;
 
-import static io.trino.spi.type.VarcharType.VARCHAR;
+import static io.airlift.slice.Slices.utf8Slice;
+import static io.trino.spi.type.VarbinaryType.VARBINARY;
 
 final class TestVariableWidthBlockEncoding
         extends BaseBlockEncodingTest<String>
@@ -26,13 +27,13 @@ final class TestVariableWidthBlockEncoding
     @Override
     protected Type getType()
     {
-        return VARCHAR;
+        return VARBINARY;
     }
 
     @Override
     protected void write(BlockBuilder blockBuilder, String value)
     {
-        VARCHAR.writeString(blockBuilder, value);
+        VARBINARY.writeSlice(blockBuilder, utf8Slice(value));
     }
 
     @Override
