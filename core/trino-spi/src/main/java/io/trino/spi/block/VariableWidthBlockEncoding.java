@@ -118,7 +118,7 @@ public class VariableWidthBlockEncoding
         }
     }
 
-    private static int[] readOffsetsWithNullsCompacted(SliceInput sliceInput, @Nullable long[] valueIsValid, int positionCount)
+    static int[] readOffsetsWithNullsCompacted(SliceInput sliceInput, @Nullable long[] valueIsValid, int positionCount)
     {
         checkBitRange(valueIsValid, 0, positionCount);
         int nonNullOffsetCount = sliceInput.readInt();
