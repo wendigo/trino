@@ -35,6 +35,7 @@ import static io.trino.spi.block.VariableWidthViewBlock.INLINE_SIZE;
 import static io.trino.spi.block.VariableWidthViewBlock.VIEW_SIZE;
 import static io.trino.spi.block.VariableWidthViewBlockBuilder.MIN_BORROWED_BUFFER_SIZE;
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 final class TestVariableWidthViewBlockBorrowing
 {
@@ -367,6 +368,111 @@ final class TestVariableWidthViewBlockBorrowing
         assertThat(tracker.getReferencedBytes()).isEqualTo(referencedBytes);
         assertBlock(blockBuilder.buildValueBlock(), values(source).subList(0, 100));
         assertThat(tracker.getReferencedBytes()).isZero();
+    }
+
+    @Test
+    public void testFromLengths()
+    {
+        Random random = new Random(21);
+        List<Slice> values = randomValues(random, 5000);
+        // every length up to the inline limit at the end of the array
+        for (int length = 0; length <= INLINE_SIZE + 1; length++) {
+            byte[] bytes = new byte[length];
+            random.nextBytes(bytes);
+            values.add(Slices.wrappedBuffer(bytes));
+        }
+        DynamicSliceOutput output = new DynamicSliceOutput(1024);
+        int[] lengths = new int[values.size() + 3];
+        long[] valueIsValid = new long[Bitmap.wordsForBits(values.size())];
+        for (int i = 0; i < values.size(); i++) {
+            if (values.get(i) != null) {
+                Bitmap.set(valueIsValid, 0, i);
+                output.writeBytes(values.get(i));
+                lengths[i] = values.get(i).length();
+            }
+        }
+        byte[] bytes = new byte[output.size() + 3];
+        output.slice().getBytes(0, bytes, 3, output.size());
+        Slice slice = Slices.wrappedBuffer(bytes, 3, output.size());
+        VariableWidthViewBlock block = VariableWidthViewBlock.fromLengths(values.size(), slice, lengths, Optional.of(valueIsValid));
+        assertBlock(block, values);
+        assertBlock(roundTrip(block), values);
+        assertThat(block.copyRegion(0, block.getPositionCount())).isSameAs(block);
+
+        // the inline values at the end of the array
+        int tail = INLINE_SIZE + 2;
+        int[] tailLengths = Arrays.copyOfRange(lengths, values.size() - tail, values.size());
+        int tailBytes = Arrays.stream(tailLengths).sum();
+        Slice tailSlice = Slices.wrappedBuffer(bytes, bytes.length - tailBytes, tailBytes);
+        assertBlock(VariableWidthViewBlock.fromLengths(tail, tailSlice, tailLengths, Optional.empty()), values.subList(values.size() - tail, values.size()));
+
+        int[] nullWithLength = {3, 4};
+        assertThatThrownBy(() -> VariableWidthViewBlock.fromLengths(2, Slices.allocate(7), nullWithLength, Optional.of(new long[] {0b01})))
+                .isInstanceOf(IllegalArgumentException.class);
+        assertThatThrownBy(() -> VariableWidthViewBlock.fromLengths(2, Slices.allocate(6), nullWithLength, Optional.empty()))
+                .isInstanceOf(IllegalArgumentException.class);
+    }
+
+    @Test
+    public void testFromOffsetsWithNullsThatHaveLengths()
+    {
+        // a VariableWidthBlock can store bytes for a null position
+        Slice bytes = Slices.utf8Slice("a value that is long, null bytes that are long, short");
+        int[] offsets = {0, 21, 47, 53};
+        long[] valueIsValid = {0b101};
+        VariableWidthViewBlock block = VariableWidthViewBlock.fromVariableWidthBlock(new VariableWidthBlock(3, bytes, offsets, Optional.of(valueIsValid)));
+        assertBlock(block, Arrays.asList(bytes.slice(0, 21), null, bytes.slice(47, 6)));
+        assertThat(block.getSizeInBytes()).isEqualTo(3 * (Integer.BYTES + Byte.BYTES) + 27);
+    }
+
+    @Test
+    public void testFromOffsetsWithChunks()
+    {
+        Random random = new Random(22);
+        List<Slice> values = randomValues(random, 5000);
+        byte[] shared = new byte[1_000_000];
+        int sharedOffset = 0;
+        List<Slice> chunks = new ArrayList<>();
+        int[] offsets = new int[values.size() + 1];
+        long[] valueIsValid = new long[Bitmap.wordsForBits(values.size())];
+        DynamicSliceOutput chunk = new DynamicSliceOutput(1024);
+        for (int i = 0; i < values.size(); i++) {
+            Slice value = values.get(i);
+            if (value != null) {
+                Bitmap.set(valueIsValid, 0, i);
+                chunk.writeBytes(value);
+            }
+            offsets[i + 1] = offsets[i] + (value == null ? 0 : value.length());
+            if (random.nextInt(50) == 0 || i == values.size() - 1) {
+                // some chunks are slices of the same array, and some are empty
+                Slice chunkSlice = chunk.slice();
+                if (random.nextBoolean()) {
+                    chunkSlice.getBytes(0, shared, sharedOffset, chunkSlice.length());
+                    chunks.add(Slices.wrappedBuffer(shared, sharedOffset, chunkSlice.length()));
+                    sharedOffset += chunkSlice.length() + 7;
+                }
+                else {
+                    chunks.add(Slices.wrappedBuffer(chunkSlice.getBytes()));
+                }
+                if (random.nextInt(10) == 0) {
+                    chunks.add(Slices.EMPTY_SLICE);
+                }
+                chunk = new DynamicSliceOutput(1024);
+            }
+        }
+        VariableWidthViewBlock block = VariableWidthViewBlock.fromOffsets(values.size(), chunks, offsets, Optional.of(valueIsValid));
+        assertBlock(block, values);
+        assertBlock(roundTrip(block), values);
+        assertThat(block.getRawBuffers().length).isGreaterThan(10);
+        assertThat(Arrays.stream(block.getRawBuffers()).filter(buffer -> buffer == shared).count()).isEqualTo(1);
+
+        // a value that spans chunks makes the chunks be copied
+        Slice joined = Slices.utf8Slice("a value that spans two chunks, short");
+        List<Slice> spanning = List.of(joined.slice(0, 10), joined.slice(10, joined.length() - 10));
+        VariableWidthViewBlock copied = VariableWidthViewBlock.fromOffsets(2, spanning, new int[] {0, 29, joined.length()}, Optional.empty());
+        assertBlock(copied, List.of(joined.slice(0, 29), joined.slice(29, joined.length() - 29)));
+        assertThatThrownBy(() -> VariableWidthViewBlock.fromOffsets(1, spanning, new int[] {0, joined.length() + 1}, Optional.empty()))
+                .isInstanceOf(IllegalArgumentException.class);
     }
 
     private VariableWidthViewBlock roundTrip(VariableWidthViewBlock block)

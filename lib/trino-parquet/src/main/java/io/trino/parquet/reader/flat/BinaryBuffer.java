@@ -98,6 +98,14 @@ public class BinaryBuffer
         return slice;
     }
 
+    /**
+     * Returns the chunks holding the data. Every value is stored in a single chunk.
+     */
+    public List<Slice> getChunks()
+    {
+        return chunks;
+    }
+
     public int[] getOffsets()
     {
         return offsets;

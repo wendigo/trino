@@ -26,6 +26,7 @@ public final class VarcharColumnAdapter
     @Override
     protected Block createBlock(BinaryBuffer values, Optional<long[]> valueIsValid)
     {
-        return VariableWidthViewBlock.fromOffsets(values.getValueCount(), values.asSlice(), values.getOffsets(), valueIsValid);
+        // the views reference the values in the chunks, so values of several pages are not copied to a single slice
+        return VariableWidthViewBlock.fromOffsets(values.getValueCount(), values.getChunks(), values.getOffsets(), valueIsValid);
     }
 }

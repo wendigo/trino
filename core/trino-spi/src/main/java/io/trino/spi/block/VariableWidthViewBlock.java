@@ -21,6 +21,8 @@ import jakarta.annotation.Nullable;
 import java.lang.invoke.MethodHandles;
 import java.lang.invoke.VarHandle;
 import java.util.Arrays;
+import java.util.IdentityHashMap;
+import java.util.List;
 import java.util.Optional;
 import java.util.function.ObjLongConsumer;
 
@@ -119,6 +121,142 @@ public final class VariableWidthViewBlock
                 block.getRawArrayBase());
     }
 
+    /// Creates a block from contiguous value bytes and the length of every value. The length of a null position must be
+    /// zero. The value bytes are not copied. Values longer than [#INLINE_SIZE] bytes reference `slice`.
+    public static VariableWidthViewBlock fromLengths(int positionCount, Slice slice, int[] lengths, Optional<long[]> valueIsValid)
+    {
+        if (positionCount < 0) {
+            throw new IllegalArgumentException("positionCount is negative");
+        }
+        if (lengths.length < positionCount) {
+            throw new IllegalArgumentException("lengths length is less than positionCount");
+        }
+        long[] validity = valueIsValid.orElse(null);
+        checkBitRange(validity, 0, positionCount);
+
+        byte[] views = new byte[positionCount * VIEW_SIZE];
+        byte[] bytes = slice.byteArray();
+        int bytesOffset = slice.byteArrayOffset();
+        int end = bytesOffset + slice.length();
+        int start = bytesOffset;
+        long outOfLineBytes = 0;
+        for (int position = 0; position < positionCount; position++) {
+            int length = lengths[position];
+            if (length < 0 || length > end - start) {
+                throw new IllegalArgumentException("lengths are outside of the slice");
+            }
+            writeView(views, position * VIEW_SIZE, bytes, start, length, 0);
+            start += length;
+            outOfLineBytes += length > INLINE_SIZE ? length : 0;
+        }
+        long[] compactValidity = compactBitmap(validity, 0, positionCount);
+        if (compactValidity != null && clearNullViews(views, compactValidity, positionCount) != 0) {
+            throw new IllegalArgumentException("length of a null position is not zero");
+        }
+        long valueBytes = start - bytesOffset;
+        return createWrappingBlock(positionCount, views, bytes, start, compactValidity, valueBytes, outOfLineBytes);
+    }
+
+    /// Creates a block from value bytes stored in several chunks and offsets of the values in the concatenation of the
+    /// chunks, in the format of [VariableWidthBlock]. The value bytes are not copied, so every value must be stored in a
+    /// single chunk; otherwise, the chunks are copied to a single slice. Values longer than [#INLINE_SIZE] bytes
+    /// reference the arrays of the chunks.
+    public static VariableWidthViewBlock fromOffsets(int positionCount, List<Slice> chunks, int[] offsets, Optional<long[]> valueIsValid)
+    {
+        if (chunks.isEmpty()) {
+            return fromOffsets(positionCount, Slices.EMPTY_SLICE, offsets, valueIsValid);
+        }
+        if (chunks.size() == 1) {
+            return fromOffsets(positionCount, chunks.getFirst(), offsets, valueIsValid);
+        }
+        if (positionCount < 0) {
+            throw new IllegalArgumentException("positionCount is negative");
+        }
+        if (offsets.length < positionCount + 1) {
+            throw new IllegalArgumentException("offsets length is less than positionCount");
+        }
+        long[] validity = valueIsValid.orElse(null);
+        checkBitRange(validity, 0, positionCount);
+
+        // chunks that slice the same array share a buffer
+        IdentityHashMap<byte[], Integer> bufferIndexes = new IdentityHashMap<>();
+        byte[][] buffers = new byte[chunks.size()][];
+        int[] bufferLengths = new int[chunks.size()];
+        int[] chunkBufferIndexes = new int[chunks.size()];
+        int bufferCount = 0;
+        for (int chunk = 0; chunk < chunks.size(); chunk++) {
+            Slice slice = chunks.get(chunk);
+            byte[] array = slice.byteArray();
+            Integer index = bufferIndexes.get(array);
+            if (index == null) {
+                index = bufferCount;
+                bufferIndexes.put(array, index);
+                buffers[bufferCount] = array;
+                bufferCount++;
+            }
+            chunkBufferIndexes[chunk] = index;
+            bufferLengths[index] = Math.max(bufferLengths[index], slice.byteArrayOffset() + slice.length());
+        }
+
+        byte[] views = new byte[positionCount * VIEW_SIZE];
+        int chunk = 0;
+        Slice chunkSlice = chunks.getFirst();
+        // the offset of the current chunk in the concatenation of the chunks
+        long chunkStart = 0;
+        long chunkEnd = chunkSlice.length();
+        long outOfLineBytes = 0;
+        for (int position = 0; position < positionCount; position++) {
+            int start = offsets[position];
+            int length = offsets[position + 1] - start;
+            if (length < 0 || start < chunkStart) {
+                throw new IllegalArgumentException("offsets are not increasing");
+            }
+            while (start + length > chunkEnd || (start == chunkEnd && length > 0)) {
+                chunk++;
+                if (chunk == chunks.size() || start < chunkEnd) {
+                    // the value is outside of the chunks, or spans chunks
+                    return fromOffsets(positionCount, concatenate(chunks), offsets, valueIsValid);
+                }
+                chunkSlice = chunks.get(chunk);
+                chunkStart = chunkEnd;
+                chunkEnd += chunkSlice.length();
+            }
+            int bytesStart = chunkSlice.byteArrayOffset() + (int) (start - chunkStart);
+            writeView(views, position * VIEW_SIZE, chunkSlice.byteArray(), bytesStart, length, chunkBufferIndexes[chunk]);
+            outOfLineBytes += length > INLINE_SIZE ? length : 0;
+        }
+        long valueBytes = offsets[positionCount] - offsets[0];
+        long[] compactValidity = compactBitmap(validity, 0, positionCount);
+        if (compactValidity != null) {
+            long nullBytes = clearNullViews(views, compactValidity, positionCount);
+            valueBytes -= nullBytes >>> Integer.SIZE;
+            outOfLineBytes -= nullBytes & 0xFFFF_FFFFL;
+        }
+        if (outOfLineBytes == 0) {
+            return new VariableWidthViewBlock(0, positionCount, views, NO_BUFFERS, NO_BUFFER_LENGTHS, compactValidity, valueBytes, 0);
+        }
+        if (bufferCount < buffers.length) {
+            buffers = Arrays.copyOf(buffers, bufferCount);
+            bufferLengths = Arrays.copyOf(bufferLengths, bufferCount);
+        }
+        return new VariableWidthViewBlock(0, positionCount, views, buffers, bufferLengths, compactValidity, valueBytes, outOfLineBytes);
+    }
+
+    private static Slice concatenate(List<Slice> chunks)
+    {
+        int length = 0;
+        for (Slice chunk : chunks) {
+            length = Math.addExact(length, chunk.length());
+        }
+        Slice slice = Slices.allocate(length);
+        int offset = 0;
+        for (Slice chunk : chunks) {
+            slice.setBytes(offset, chunk);
+            offset += chunk.length();
+        }
+        return slice;
+    }
+
     private static VariableWidthViewBlock fromOffsets(int positionCount, Slice slice, int[] offsets, int offsetsBase, @Nullable long[] valueIsValid, int valueIsValidBase)
     {
         if (positionCount < 0) {
@@ -135,38 +273,61 @@ public final class VariableWidthViewBlock
         byte[] views = new byte[positionCount * VIEW_SIZE];
         byte[] bytes = slice.byteArray();
         int bytesOffset = slice.byteArrayOffset();
-        long valueBytes = 0;
         long outOfLineBytes = 0;
+        // null positions are written like other positions and cleared afterwards, since their offsets usually do not
+        // differ, which avoids checking the validity of every position
         for (int position = 0; position < positionCount; position++) {
-            if (valueIsValid != null && !Bitmap.isSet(valueIsValid, valueIsValidBase, position)) {
-                continue;
-            }
-            int start = bytesOffset + offsets[offsetsBase + position];
-            int length = offsets[offsetsBase + position + 1] - offsets[offsetsBase + position];
+            int start = offsets[offsetsBase + position];
+            int length = offsets[offsetsBase + position + 1] - start;
             if (length < 0) {
                 throw new IllegalArgumentException("offsets are not increasing");
             }
-            valueBytes += length;
-            if (length <= INLINE_SIZE) {
-                writeInlineView(views, position * VIEW_SIZE, bytes, start, length);
-            }
-            else {
-                writeOutOfLineView(views, position * VIEW_SIZE, bytes, start, length, 0, start);
-                outOfLineBytes += length;
-            }
+            writeView(views, position * VIEW_SIZE, bytes, bytesOffset + start, length, 0);
+            outOfLineBytes += length > INLINE_SIZE ? length : 0;
         }
+        long valueBytes = offsets[offsetsBase + positionCount] - offsets[offsetsBase];
+        long[] compactValidity = compactBitmap(valueIsValid, valueIsValidBase, positionCount);
+        if (compactValidity != null) {
+            long nullBytes = clearNullViews(views, compactValidity, positionCount);
+            valueBytes -= nullBytes >>> Integer.SIZE;
+            outOfLineBytes -= nullBytes & 0xFFFF_FFFFL;
+        }
+        return createWrappingBlock(positionCount, views, bytes, bytesOffset + offsets[offsetsBase + positionCount], compactValidity, valueBytes, outOfLineBytes);
+    }
+
+    private static VariableWidthViewBlock createWrappingBlock(int positionCount, byte[] views, byte[] bytes, int bytesEnd, @Nullable long[] valueIsValid, long valueBytes, long outOfLineBytes)
+    {
         if (outOfLineBytes == 0) {
-            return new VariableWidthViewBlock(0, positionCount, views, NO_BUFFERS, NO_BUFFER_LENGTHS, compactBitmap(valueIsValid, valueIsValidBase, positionCount), valueBytes, 0);
+            return new VariableWidthViewBlock(0, positionCount, views, NO_BUFFERS, NO_BUFFER_LENGTHS, valueIsValid, valueBytes, 0);
         }
-        return new VariableWidthViewBlock(
-                0,
-                positionCount,
-                views,
-                new byte[][] {bytes},
-                new int[] {bytesOffset + offsets[offsetsBase + positionCount]},
-                compactBitmap(valueIsValid, valueIsValidBase, positionCount),
-                valueBytes,
-                outOfLineBytes);
+        return new VariableWidthViewBlock(0, positionCount, views, new byte[][] {bytes}, new int[] {bytesEnd}, valueIsValid, valueBytes, outOfLineBytes);
+    }
+
+    /// Clears the views of the null positions and returns the total length of their values in the high int, and of
+    /// their out-of-line values in the low int.
+    private static long clearNullViews(byte[] views, long[] valueIsValid, int positionCount)
+    {
+        long valueBytes = 0;
+        long outOfLineBytes = 0;
+        for (int word = 0; word < valueIsValid.length; word++) {
+            int wordStart = word * Long.SIZE;
+            long nulls = ~valueIsValid[word];
+            if (positionCount - wordStart < Long.SIZE) {
+                nulls &= (1L << (positionCount - wordStart)) - 1;
+            }
+            while (nulls != 0) {
+                int view = (wordStart + Long.numberOfTrailingZeros(nulls)) * VIEW_SIZE;
+                int length = length(views, view);
+                if (length != 0) {
+                    valueBytes += length;
+                    outOfLineBytes += length > INLINE_SIZE ? length : 0;
+                    LONG_LE.set(views, view, 0L);
+                    LONG_LE.set(views, view + Long.BYTES, 0L);
+                }
+                nulls &= nulls - 1;
+            }
+        }
+        return (valueBytes << Integer.SIZE) | outOfLineBytes;
     }
 
     VariableWidthViewBlock(int arrayOffset, int positionCount, byte[] views, byte[][] buffers, @Nullable long[] valueIsValid)
@@ -779,6 +940,32 @@ public final class VariableWidthViewBlock
         }
         LONG_LE.set(views, view, (length & 0xFFFF_FFFFL) | (low << Integer.SIZE));
         LONG_LE.set(views, view + Long.BYTES, (low >>> Integer.SIZE) | (high << Integer.SIZE));
+    }
+
+    /// Writes the complete view of a value of `length` bytes stored at `bytes[start]`. A value longer than
+    /// [#INLINE_SIZE] bytes points at `start` in buffer `bufferIndex`, which is `bytes`. The same code builds inline and
+    /// out-of-line views, so that the length of the values does not cause branch mispredictions.
+    static void writeView(byte[] views, int view, byte[] bytes, int start, int length, int bufferIndex)
+    {
+        long low;
+        long high;
+        if (bytes.length - start >= INLINE_SIZE) {
+            low = (long) LONG_LE.get(bytes, start);
+            high = (int) INT_LE.get(bytes, start + Long.BYTES) & 0xFFFF_FFFFL;
+        }
+        else {
+            // fewer than INLINE_SIZE bytes remain in the array, so the value is inline
+            low = readLowWord(bytes, start, length);
+            high = readHighWord(bytes, start, length);
+        }
+        // a value longer than INLINE_SIZE bytes uses the first 4 bytes of the low word as its prefix
+        int maskIndex = Math.min(length, INLINE_SIZE);
+        low &= LOW_WORD_MASKS[maskIndex];
+        high &= HIGH_WORD_MASKS[maskIndex];
+        LONG_LE.set(views, view, (length & 0xFFFF_FFFFL) | (low << Integer.SIZE));
+        long inlineWord = (low >>> Integer.SIZE) | (high << Integer.SIZE);
+        long locationWord = (bufferIndex & 0xFFFF_FFFFL) | ((long) start << Integer.SIZE);
+        LONG_LE.set(views, view + Long.BYTES, length <= INLINE_SIZE ? inlineWord : locationWord);
     }
 
     /// Reads bytes 0 to 7 of an inline value of `length` bytes as a little-endian long, without reading past it.

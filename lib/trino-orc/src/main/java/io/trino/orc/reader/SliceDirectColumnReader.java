@@ -203,6 +203,10 @@ public class SliceDirectColumnReader
         if (maxCodePointCount < 0) {
             // unbounded, simply read all data in on shot
             dataStream.next(data, 0, data.length);
+            if (isVarcharType) {
+                // build the views from the lengths, which are zero for null positions, without computing offsets
+                return VariableWidthViewBlock.fromLengths(currentBatchSize, slice, offsetVector, Optional.ofNullable(valueIsValid));
+            }
             convertLengthVectorToOffsetVector(offsetVector);
         }
         else {
