@@ -14,6 +14,7 @@
 package io.trino.operator.output;
 
 import io.trino.spi.block.Block;
+import io.trino.spi.block.BorrowedBufferTracker;
 import io.trino.spi.block.RowBlock;
 import io.trino.spi.block.RunLengthEncodedBlock;
 import io.trino.spi.block.ValueBlock;
@@ -63,11 +64,12 @@ public final class RowPositionsAppender
             PositionsAppenderFactory positionsAppenderFactory,
             RowType type,
             int expectedPositions,
-            long maxPageSizeInBytes)
+            long maxPageSizeInBytes,
+            @Nullable BorrowedBufferTracker borrowedBufferTracker)
     {
         UnnestingPositionsAppender[] fields = new UnnestingPositionsAppender[type.getFields().size()];
         for (int i = 0; i < fields.length; i++) {
-            fields[i] = positionsAppenderFactory.create(type.getFields().get(i).getType(), expectedPositions, maxPageSizeInBytes);
+            fields[i] = positionsAppenderFactory.create(type.getFields().get(i).getType(), expectedPositions, maxPageSizeInBytes, borrowedBufferTracker);
         }
         return new RowPositionsAppender(type, fields, expectedPositions);
     }

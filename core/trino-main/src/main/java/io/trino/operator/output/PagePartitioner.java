@@ -25,6 +25,7 @@ import io.trino.operator.OperatorContext;
 import io.trino.operator.PartitionFunction;
 import io.trino.spi.Page;
 import io.trino.spi.block.Block;
+import io.trino.spi.block.BorrowedBufferTracker;
 import io.trino.spi.block.RunLengthEncodedBlock;
 import io.trino.spi.metrics.Metrics;
 import io.trino.spi.predicate.NullableValue;
@@ -59,6 +60,8 @@ public class PagePartitioner
     private final PartitionFunction partitionFunction;
     private final int[] partitionChannels;
     private final LocalMemoryContext memoryContext;
+    // the appenders of all partitions borrow the value buffers of the partitioned pages instead of copying their values
+    private final BorrowedBufferTracker borrowedBufferTracker = new BorrowedBufferTracker();
     @Nullable
     private final Block[] partitionConstantBlocks; // when null, no constants are present. Only non-null elements are constants
     private final PageSerializer serializer;
@@ -120,7 +123,7 @@ public class PagePartitioner
 
         this.positionsAppenders = new PositionsAppenderPageBuilder[partitionCount];
         for (int i = 0; i < partitionCount; i++) {
-            positionsAppenders[i] = PositionsAppenderPageBuilder.withMaxPageSize(pageSize, requireNonNull(sourceTypes, "sourceTypes is null"), positionsAppenderFactory);
+            positionsAppenders[i] = PositionsAppenderPageBuilder.withMaxPageSize(pageSize, requireNonNull(sourceTypes, "sourceTypes is null"), positionsAppenderFactory, borrowedBufferTracker);
         }
         this.memoryContext = aggregatedMemoryContext.newLocalMemoryContext(PagePartitioner.class.getSimpleName());
         updateMemoryUsage();
@@ -512,6 +515,8 @@ public class PagePartitioner
         for (PositionsAppenderPageBuilder pageBuilder : positionsAppenders) {
             retainedSizeInBytes += pageBuilder.getRetainedSizeInBytes();
         }
+        // the appenders do not account for the value buffers they borrow, which several of them can share
+        retainedSizeInBytes += borrowedBufferTracker.getRetainedSizeInBytes();
         retainedSizeInBytes += serializer.getRetainedSizeInBytes();
         memoryContext.setBytes(retainedSizeInBytes);
     }

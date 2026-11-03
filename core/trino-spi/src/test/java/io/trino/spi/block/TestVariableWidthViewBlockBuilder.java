@@ -307,7 +307,7 @@ final class TestVariableWidthViewBlockBuilder
         VariableWidthViewBlock region = block.getRegion(101, 2500);
         VariableWidthViewBlock copiedRegion = region.copyRegion(7, 2400);
         assertThat(blockToValues(copiedRegion)).isEqualTo(expected.subList(108, 2508));
-        assertThat(copiedRegion.getRawBuffers().length).isEqualTo(1);
+        assertCompact(copiedRegion);
         assertThat(copiedRegion.copyRegion(0, copiedRegion.getPositionCount())).isSameAs(copiedRegion);
 
         int[] positions = new int[region.getPositionCount()];
@@ -338,6 +338,18 @@ final class TestVariableWidthViewBlockBuilder
         assertThat(block).isInstanceOf(RunLengthEncodedBlock.class);
         assertThat(((RunLengthEncodedBlock) block).getValue()).isInstanceOf(VariableWidthViewBlock.class);
         assertThat(block.isNull(1)).isTrue();
+    }
+
+    /// Asserts that the buffers of `block` hold at most 1/8 more bytes than its out-of-line values, plus the bytes of
+    /// its inline values.
+    static void assertCompact(VariableWidthViewBlock block)
+    {
+        long bufferBytes = 0;
+        for (byte[] buffer : block.getRawBuffers()) {
+            bufferBytes += buffer.length;
+        }
+        assertThat(bufferBytes).isLessThanOrEqualTo(block.getValueBytes() + block.getOutOfLineBytes() / 8);
+        assertThat(block.getRawViews()).hasSize(block.getPositionCount() * VariableWidthViewBlock.VIEW_SIZE);
     }
 
     private static void assertSameValues(VariableWidthViewBlock actual, VariableWidthBlock expected)

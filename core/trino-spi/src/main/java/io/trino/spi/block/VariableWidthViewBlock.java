@@ -33,6 +33,7 @@ import static io.trino.spi.block.Bitmap.set;
 import static io.trino.spi.block.BlockUtil.checkArrayRange;
 import static io.trino.spi.block.BlockUtil.checkValidPosition;
 import static io.trino.spi.block.BlockUtil.checkValidRegion;
+import static java.lang.Math.toIntExact;
 import static java.nio.ByteOrder.BIG_ENDIAN;
 import static java.nio.ByteOrder.LITTLE_ENDIAN;
 
@@ -78,17 +79,25 @@ public final class VariableWidthViewBlock
     }
 
     static final byte[][] NO_BUFFERS = new byte[0][];
+    static final int[] NO_BUFFER_LENGTHS = new int[0];
+
+    // a copy shares a buffer when the bytes of the buffer that its views do not reference are at most this fraction of
+    // the bytes they reference
+    static final int MAX_UNREFERENCED_BYTES_DIVISOR = 8;
 
     private final int arrayOffset;
     private final int positionCount;
     private final byte[] views;
     private final byte[][] buffers;
+    // the number of leading bytes of each buffer that views of this block may reference
+    private final int[] bufferLengths;
+    private final long usedBufferBytes;
     @Nullable
     private final long[] valueIsValid;
 
     private final long retainedSizeInBytes;
-    // computed on first use; racing threads compute the same values
-    private long sizeInBytes = -1;
+    // known when the block is created, or computed on first use; racing threads compute the same values
+    private long valueBytes = -1;
     private long outOfLineBytes = -1;
 
     /// Creates a block from contiguous value bytes and offsets, in the format of [VariableWidthBlock].
@@ -126,7 +135,8 @@ public final class VariableWidthViewBlock
         byte[] views = new byte[positionCount * VIEW_SIZE];
         byte[] bytes = slice.byteArray();
         int bytesOffset = slice.byteArrayOffset();
-        boolean referencesSlice = false;
+        long valueBytes = 0;
+        long outOfLineBytes = 0;
         for (int position = 0; position < positionCount; position++) {
             if (valueIsValid != null && !Bitmap.isSet(valueIsValid, valueIsValidBase, position)) {
                 continue;
@@ -136,23 +146,47 @@ public final class VariableWidthViewBlock
             if (length < 0) {
                 throw new IllegalArgumentException("offsets are not increasing");
             }
+            valueBytes += length;
             if (length <= INLINE_SIZE) {
                 writeInlineView(views, position * VIEW_SIZE, bytes, start, length);
             }
             else {
                 writeOutOfLineView(views, position * VIEW_SIZE, bytes, start, length, 0, start);
-                referencesSlice = true;
+                outOfLineBytes += length;
             }
+        }
+        if (outOfLineBytes == 0) {
+            return new VariableWidthViewBlock(0, positionCount, views, NO_BUFFERS, NO_BUFFER_LENGTHS, compactBitmap(valueIsValid, valueIsValidBase, positionCount), valueBytes, 0);
         }
         return new VariableWidthViewBlock(
                 0,
                 positionCount,
                 views,
-                referencesSlice ? new byte[][] {bytes} : NO_BUFFERS,
-                compactBitmap(valueIsValid, valueIsValidBase, positionCount));
+                new byte[][] {bytes},
+                new int[] {bytesOffset + offsets[offsetsBase + positionCount]},
+                compactBitmap(valueIsValid, valueIsValidBase, positionCount),
+                valueBytes,
+                outOfLineBytes);
     }
 
     VariableWidthViewBlock(int arrayOffset, int positionCount, byte[] views, byte[][] buffers, @Nullable long[] valueIsValid)
+    {
+        this(arrayOffset, positionCount, views, buffers, null, valueIsValid, -1, -1);
+    }
+
+    /// @param bufferLengths the number of leading bytes of each buffer that the views may reference, or null when the
+    ///         views may reference whole buffers
+    /// @param valueBytes the total length of the values, or -1 when it is not known
+    /// @param outOfLineBytes the total length of the values longer than [#INLINE_SIZE], or -1 when it is not known
+    VariableWidthViewBlock(
+            int arrayOffset,
+            int positionCount,
+            byte[] views,
+            byte[][] buffers,
+            @Nullable int[] bufferLengths,
+            @Nullable long[] valueIsValid,
+            long valueBytes,
+            long outOfLineBytes)
     {
         if (arrayOffset < 0) {
             throw new IllegalArgumentException("arrayOffset is negative");
@@ -173,10 +207,34 @@ public final class VariableWidthViewBlock
         }
         this.buffers = buffers;
 
+        if (bufferLengths == null) {
+            bufferLengths = new int[buffers.length];
+            for (int i = 0; i < buffers.length; i++) {
+                bufferLengths[i] = buffers[i].length;
+            }
+        }
+        else if (bufferLengths.length != buffers.length) {
+            throw new IllegalArgumentException("bufferLengths length does not match buffers length");
+        }
+        long usedBufferBytes = 0;
+        for (int i = 0; i < buffers.length; i++) {
+            if (bufferLengths[i] < 0 || bufferLengths[i] > buffers[i].length) {
+                throw new IllegalArgumentException("buffer length is outside of the buffer");
+            }
+            usedBufferBytes += bufferLengths[i];
+        }
+        this.bufferLengths = bufferLengths;
+        this.usedBufferBytes = usedBufferBytes;
+        if ((valueBytes < 0) != (outOfLineBytes < 0)) {
+            throw new IllegalArgumentException("valueBytes and outOfLineBytes must both be known or unknown");
+        }
+        this.valueBytes = valueBytes;
+        this.outOfLineBytes = outOfLineBytes;
+
         checkBitRange(valueIsValid, arrayOffset, positionCount);
         this.valueIsValid = valueIsValid;
 
-        long retainedSize = INSTANCE_SIZE + sizeOf(views) + sizeOf(valueIsValid) + sizeOf(buffers);
+        long retainedSize = INSTANCE_SIZE + sizeOf(views) + sizeOf(valueIsValid) + sizeOf(buffers) + sizeOf(bufferLengths);
         for (byte[] buffer : buffers) {
             retainedSize += sizeOf(buffer);
         }
@@ -325,12 +383,19 @@ public final class VariableWidthViewBlock
     @Override
     public long getSizeInBytes()
     {
-        long sizeInBytes = this.sizeInBytes;
-        if (sizeInBytes < 0) {
+        // same accounting as VariableWidthBlock, so page sizes do not depend on the layout
+        return SIZE_IN_BYTES_PER_POSITION * (long) positionCount + getValueBytes();
+    }
+
+    /// Returns the total length of the values.
+    long getValueBytes()
+    {
+        long valueBytes = this.valueBytes;
+        if (valueBytes < 0) {
             computeSizes();
-            sizeInBytes = this.sizeInBytes;
+            valueBytes = this.valueBytes;
         }
-        return sizeInBytes;
+        return valueBytes;
     }
 
     /// Returns the total length of the values stored outside of the views. A value that several views share is
@@ -357,8 +422,13 @@ public final class VariableWidthViewBlock
             }
         }
         this.outOfLineBytes = outOfLineBytes;
-        // same accounting as VariableWidthBlock, so page sizes do not depend on the layout
-        this.sizeInBytes = SIZE_IN_BYTES_PER_POSITION * (long) positionCount + valueBytes;
+        this.valueBytes = valueBytes;
+    }
+
+    /// Returns the total number of leading bytes of the buffers that views may reference.
+    long getUsedBufferBytes()
+    {
+        return usedBufferBytes;
     }
 
     @Override
@@ -389,6 +459,7 @@ public final class VariableWidthViewBlock
     public void retainedBytesForEachPart(ObjLongConsumer<Object> consumer)
     {
         consumer.accept(views, sizeOf(views));
+        consumer.accept(bufferLengths, sizeOf(bufferLengths));
         for (byte[] buffer : buffers) {
             consumer.accept(buffer, sizeOf(buffer));
         }
@@ -451,108 +522,182 @@ public final class VariableWidthViewBlock
         }
 
         byte[] newViews = new byte[length * VIEW_SIZE];
-        int outOfLineBytes = 0;
         for (int i = 0; i < length; i++) {
             int view = view(positions[offset + i]);
             int newView = i * VIEW_SIZE;
-            long lengthAndPrefix = (long) LONG_LE.get(views, view);
-            LONG_LE.set(newViews, newView, lengthAndPrefix);
+            LONG_LE.set(newViews, newView, (long) LONG_LE.get(views, view));
             LONG_LE.set(newViews, newView + Long.BYTES, (long) LONG_LE.get(views, view + Long.BYTES));
-            int valueLength = (int) lengthAndPrefix;
-            if (valueLength > INLINE_SIZE) {
-                outOfLineBytes = Math.addExact(outOfLineBytes, valueLength);
-            }
         }
-        return new VariableWidthViewBlock(0, length, newViews, moveOutOfLineValues(newViews, outOfLineBytes), newValueIsValid);
-    }
-
-    /// Copies the out-of-line values referenced by `newViews` to a single new buffer and points the views at it.
-    /// Values that are adjacent in a buffer of this block are copied together.
-    private byte[][] moveOutOfLineValues(byte[] newViews, int outOfLineBytes)
-    {
-        if (outOfLineBytes == 0) {
-            return NO_BUFFERS;
-        }
-        byte[] newBuffer = new byte[outOfLineBytes];
-        int newBufferOffset = 0;
-        byte[] run = null;
-        int runStart = 0;
-        int runEnd = 0;
-        int runDestination = 0;
-        for (int newView = 0; newView < newViews.length; newView += VIEW_SIZE) {
-            int valueLength = length(newViews, newView);
-            if (valueLength <= INLINE_SIZE) {
-                continue;
-            }
-            byte[] buffer = buffers[bufferIndex(newViews, newView)];
-            int bufferOffset = bufferOffset(newViews, newView);
-            if (buffer != run || bufferOffset != runEnd) {
-                if (run != null) {
-                    System.arraycopy(run, runStart, newBuffer, runDestination, runEnd - runStart);
-                }
-                run = buffer;
-                runStart = bufferOffset;
-                runDestination = newBufferOffset;
-            }
-            runEnd = bufferOffset + valueLength;
-            setBufferLocation(newViews, newView, 0, newBufferOffset);
-            newBufferOffset += valueLength;
-        }
-        System.arraycopy(run, runStart, newBuffer, runDestination, runEnd - runStart);
-        return new byte[][] {newBuffer};
+        BufferPlan plan = planBuffers(newViews, 0, newViews.length);
+        return plan.createBlock(newViews, newValueIsValid);
     }
 
     @Override
     public VariableWidthViewBlock getRegion(int positionOffset, int length)
     {
         checkValidRegion(positionCount, positionOffset, length);
-        return new VariableWidthViewBlock(arrayOffset + positionOffset, length, views, buffers, valueIsValid);
+        if (positionOffset == 0 && length == positionCount) {
+            return this;
+        }
+        return new VariableWidthViewBlock(arrayOffset + positionOffset, length, views, buffers, bufferLengths, valueIsValid, -1, -1);
     }
 
     @Override
     public VariableWidthViewBlock copyRegion(int positionOffset, int length)
     {
         checkValidRegion(positionCount, positionOffset, length);
-        if (positionOffset == 0 && length == positionCount && isCompact()) {
+        int start = view(positionOffset);
+        int end = start + length * VIEW_SIZE;
+        BufferPlan plan = planBuffers(views, start, end);
+        if (plan.sharesAllBuffers() &&
+                arrayOffset == 0 &&
+                positionOffset == 0 &&
+                length == positionCount &&
+                views.length == end &&
+                (valueIsValid == null || valueIsValid.length == Bitmap.wordsForBits(positionCount))) {
             return this;
         }
-        int start = view(positionOffset);
-        byte[] newViews = Arrays.copyOfRange(views, start, start + length * VIEW_SIZE);
-        int outOfLineBytes = 0;
-        for (int newView = 0; newView < newViews.length; newView += VIEW_SIZE) {
-            int valueLength = length(newViews, newView);
-            if (valueLength > INLINE_SIZE) {
-                outOfLineBytes = Math.addExact(outOfLineBytes, valueLength);
-            }
-        }
+        byte[] newViews = Arrays.copyOfRange(views, start, end);
         long[] newValueIsValid = compactBitmap(valueIsValid, arrayOffset + positionOffset, length);
-        return new VariableWidthViewBlock(0, length, newViews, moveOutOfLineValues(newViews, outOfLineBytes), newValueIsValid);
+        return plan.createBlock(newViews, newValueIsValid);
     }
 
-    /// Returns whether the block retains no more than its views and the bytes of its values. A block wrapping the
-    /// value bytes of a reader also holds the bytes of the inline values in its buffer, which is bounded by the size of
-    /// the views.
-    private boolean isCompact()
+    /// Decides which buffers a compact copy of the views between `start` and `end` of `views` can share. A buffer is
+    /// shared when the views reference most of its bytes. The bytes of the inline values may also be left unreferenced,
+    /// since a block that wraps the value bytes of a reader holds them in its buffer, and they are bounded by the size
+    /// of the views. The values in the other buffers are copied to a single new buffer.
+    private BufferPlan planBuffers(byte[] views, int start, int end)
     {
-        if (arrayOffset != 0 || views.length != positionCount * VIEW_SIZE || buffers.length > 1) {
-            return false;
-        }
-        if (valueIsValid != null && valueIsValid.length != Bitmap.wordsForBits(positionCount)) {
-            return false;
-        }
-        long outOfLineBytes = 0;
         long valueBytes = 0;
-        for (int position = 0; position < positionCount; position++) {
-            int length = length(view(position));
+        long outOfLineBytes = 0;
+        long[] referencedBytes = new long[buffers.length];
+        for (int view = start; view < end; view += VIEW_SIZE) {
+            int length = length(views, view);
             valueBytes += length;
             if (length > INLINE_SIZE) {
                 outOfLineBytes += length;
+                // a value that several views share is counted for every view, which favors sharing its buffer
+                referencedBytes[bufferIndex(views, view)] += length;
             }
         }
-        if (buffers.length == 0) {
-            return outOfLineBytes == 0;
+
+        long unreferencedBytesAllowance = valueBytes - outOfLineBytes;
+        int[] newBufferIndexes = new int[buffers.length];
+        int sharedBufferCount = 0;
+        long copiedBytes = 0;
+        for (int i = 0; i < buffers.length; i++) {
+            long referenced = referencedBytes[i];
+            long unreferenced = Math.max(buffers[i].length - referenced, 0);
+            boolean share = referenced > 0 && unreferenced <= referenced / MAX_UNREFERENCED_BYTES_DIVISOR;
+            if (referenced > 0 && !share && unreferenced <= unreferencedBytesAllowance) {
+                unreferencedBytesAllowance -= unreferenced;
+                share = true;
+            }
+            if (share) {
+                newBufferIndexes[i] = sharedBufferCount;
+                sharedBufferCount++;
+            }
+            else {
+                newBufferIndexes[i] = -1;
+                copiedBytes += referenced;
+            }
         }
-        return buffers[0].length >= outOfLineBytes && buffers[0].length <= valueBytes;
+        return new BufferPlan(newBufferIndexes, sharedBufferCount, toIntExact(copiedBytes), valueBytes, outOfLineBytes);
+    }
+
+    private final class BufferPlan
+    {
+        private final int[] newBufferIndexes;
+        private final int sharedBufferCount;
+        private final int copiedBytes;
+        private final long valueBytes;
+        private final long outOfLineBytes;
+
+        private BufferPlan(int[] newBufferIndexes, int sharedBufferCount, int copiedBytes, long valueBytes, long outOfLineBytes)
+        {
+            this.newBufferIndexes = newBufferIndexes;
+            this.sharedBufferCount = sharedBufferCount;
+            this.copiedBytes = copiedBytes;
+            this.valueBytes = valueBytes;
+            this.outOfLineBytes = outOfLineBytes;
+        }
+
+        public boolean sharesAllBuffers()
+        {
+            return sharedBufferCount == buffers.length;
+        }
+
+        /// Creates a block from `newViews`, copies of views of this block, pointing them at the new buffers.
+        public VariableWidthViewBlock createBlock(byte[] newViews, @Nullable long[] newValueIsValid)
+        {
+            int newBufferCount = sharedBufferCount + (copiedBytes > 0 ? 1 : 0);
+            if (newBufferCount == 0) {
+                return new VariableWidthViewBlock(0, newViews.length / VIEW_SIZE, newViews, NO_BUFFERS, NO_BUFFER_LENGTHS, newValueIsValid, valueBytes, outOfLineBytes);
+            }
+            byte[][] newBuffers = new byte[newBufferCount][];
+            int[] newBufferLengths = new int[newBufferCount];
+            boolean renumbered = false;
+            for (int i = 0; i < buffers.length; i++) {
+                int newIndex = newBufferIndexes[i];
+                if (newIndex >= 0) {
+                    newBuffers[newIndex] = buffers[i];
+                    newBufferLengths[newIndex] = bufferLengths[i];
+                }
+                renumbered |= newIndex != i;
+            }
+            if (copiedBytes > 0) {
+                newBuffers[sharedBufferCount] = moveCopiedValues(newViews);
+                newBufferLengths[sharedBufferCount] = copiedBytes;
+            }
+            else if (renumbered) {
+                for (int newView = 0; newView < newViews.length; newView += VIEW_SIZE) {
+                    if (length(newViews, newView) > INLINE_SIZE) {
+                        setBufferIndex(newViews, newView, newBufferIndexes[bufferIndex(newViews, newView)]);
+                    }
+                }
+            }
+            return new VariableWidthViewBlock(0, newViews.length / VIEW_SIZE, newViews, newBuffers, newBufferLengths, newValueIsValid, valueBytes, outOfLineBytes);
+        }
+
+        /// Copies the values in buffers that are not shared to a new buffer, and points all views at their new buffers.
+        /// Values that are adjacent in a buffer of this block are copied together.
+        private byte[] moveCopiedValues(byte[] newViews)
+        {
+            byte[] newBuffer = new byte[copiedBytes];
+            int newBufferIndex = sharedBufferCount;
+            int newBufferOffset = 0;
+            byte[] run = null;
+            int runStart = 0;
+            int runEnd = 0;
+            int runDestination = 0;
+            for (int newView = 0; newView < newViews.length; newView += VIEW_SIZE) {
+                int valueLength = length(newViews, newView);
+                if (valueLength <= INLINE_SIZE) {
+                    continue;
+                }
+                int bufferIndex = bufferIndex(newViews, newView);
+                int newIndex = newBufferIndexes[bufferIndex];
+                if (newIndex >= 0) {
+                    setBufferIndex(newViews, newView, newIndex);
+                    continue;
+                }
+                byte[] buffer = buffers[bufferIndex];
+                int bufferOffset = bufferOffset(newViews, newView);
+                if (buffer != run || bufferOffset != runEnd) {
+                    if (run != null) {
+                        System.arraycopy(run, runStart, newBuffer, runDestination, runEnd - runStart);
+                    }
+                    run = buffer;
+                    runStart = bufferOffset;
+                    runDestination = newBufferOffset;
+                }
+                runEnd = bufferOffset + valueLength;
+                setBufferLocation(newViews, newView, newBufferIndex, newBufferOffset);
+                newBufferOffset += valueLength;
+            }
+            System.arraycopy(run, runStart, newBuffer, runDestination, runEnd - runStart);
+            return newBuffer;
+        }
     }
 
     @Override
@@ -562,7 +707,7 @@ public final class VariableWidthViewBlock
         int end = (arrayOffset + positionCount) * VIEW_SIZE;
         byte[] newViews = Arrays.copyOf(views, end + VIEW_SIZE);
         Arrays.fill(newViews, end, end + VIEW_SIZE, (byte) 0);
-        return new VariableWidthViewBlock(arrayOffset, positionCount + 1, newViews, buffers, newValueIsValid);
+        return new VariableWidthViewBlock(arrayOffset, positionCount + 1, newViews, buffers, bufferLengths, newValueIsValid, getValueBytes(), getOutOfLineBytes());
     }
 
     @Override
@@ -599,6 +744,11 @@ public final class VariableWidthViewBlock
     byte[][] getRawBuffers()
     {
         return buffers;
+    }
+
+    int[] getRawBufferLengths()
+    {
+        return bufferLengths;
     }
 
     @Nullable
@@ -678,6 +828,11 @@ public final class VariableWidthViewBlock
     static int bufferOffset(byte[] views, int view)
     {
         return (int) INT_LE.get(views, view + BUFFER_OFFSET_OFFSET);
+    }
+
+    static void setBufferIndex(byte[] views, int view, int bufferIndex)
+    {
+        INT_LE.set(views, view + BUFFER_INDEX_OFFSET, bufferIndex);
     }
 
     static void setBufferLocation(byte[] views, int view, int bufferIndex, int bufferOffset)

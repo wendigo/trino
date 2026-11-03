@@ -17,7 +17,9 @@ import com.google.common.collect.ArrayListMultimap;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.Multimap;
 import com.google.common.util.concurrent.ListenableFuture;
+import io.airlift.slice.DynamicSliceOutput;
 import io.airlift.slice.Slice;
+import io.airlift.slice.Slices;
 import io.airlift.units.DataSize;
 import io.trino.execution.StateMachine;
 import io.trino.execution.buffer.BufferResult;
@@ -40,6 +42,7 @@ import io.trino.spi.Page;
 import io.trino.spi.block.Block;
 import io.trino.spi.block.DictionaryBlock;
 import io.trino.spi.block.RunLengthEncodedBlock;
+import io.trino.spi.block.VariableWidthViewBlock;
 import io.trino.spi.predicate.NullableValue;
 import io.trino.spi.type.ArrayType;
 import io.trino.spi.type.Decimals;
@@ -66,6 +69,8 @@ import java.util.stream.Stream;
 
 import static com.google.common.base.Preconditions.checkArgument;
 import static io.airlift.concurrent.Threads.daemonThreadsNamed;
+import static io.airlift.slice.SizeOf.sizeOf;
+import static io.airlift.slice.Slices.utf8Slice;
 import static io.airlift.units.DataSize.Unit.MEGABYTE;
 import static io.trino.SessionTestUtils.TEST_SESSION;
 import static io.trino.block.BlockAssertions.createLongDictionaryBlock;
@@ -752,6 +757,38 @@ public class TestPagePartitioner
 
         assertThatThrownBy(pagePartitioner::close).isEqualTo(exception);
         assertThat(memoryContext.getBytes()).isEqualTo(0);
+    }
+
+    @Test
+    public void testMemoryOfSharedValueBuffers()
+    {
+        // the values are stored in a single buffer, which the appenders of all partitions borrow
+        int partitionCount = 64;
+        int positionCount = 4000;
+        DynamicSliceOutput values = new DynamicSliceOutput(positionCount * 200);
+        int[] offsets = new int[positionCount + 1];
+        for (int position = 0; position < positionCount; position++) {
+            values.writeBytes(utf8Slice("value %s ".formatted(position).repeat(20)));
+            offsets[position + 1] = values.size();
+        }
+        Slice valueBytes = Slices.wrappedBuffer(values.slice().getBytes());
+        Page page = new Page(createLongSequenceBlock(0, positionCount), VariableWidthViewBlock.fromOffsets(positionCount, valueBytes, offsets, Optional.empty()));
+
+        AggregatedMemoryContext memoryContext = newSimpleAggregatedMemoryContext();
+        TestOutputBuffer outputBuffer = new TestOutputBuffer();
+        PagePartitioner pagePartitioner = pagePartitioner(outputBuffer, BIGINT, VARCHAR)
+                .withPartitionFunction(new SumModuloPartitionFunction(partitionCount, 0))
+                .withMemoryContext(memoryContext)
+                .build();
+        pagePartitioner.partitionPage(page, operatorContext());
+
+        // the buffer is accounted for once, and not once for every partition
+        long bufferSize = sizeOf(valueBytes.byteArray());
+        assertThat(memoryContext.getBytes()).isBetween(bufferSize, 2 * bufferSize);
+
+        pagePartitioner.close();
+        assertThat(memoryContext.getBytes()).isEqualTo(0);
+        assertEqualsIgnoreOrder(readChannel(outputBuffer.getEnqueuedDeserialized(), 1, VARCHAR), readChannel(Stream.of(page), 1, VARCHAR));
     }
 
     private void testOutputEqualsInput(Type type, PartitioningMode mode1, PartitioningMode mode2)

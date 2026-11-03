@@ -13,6 +13,7 @@
  */
 package io.trino.operator.output;
 
+import io.trino.spi.block.BorrowedBufferTracker;
 import io.trino.spi.block.RowBlock;
 import io.trino.spi.block.VariableWidthBlock;
 import io.trino.spi.block.VariableWidthBlockBuilder;
@@ -22,6 +23,7 @@ import io.trino.spi.type.RowType;
 import io.trino.spi.type.Type;
 import io.trino.type.BlockTypeOperators;
 import io.trino.type.BlockTypeOperators.BlockPositionIsIdentical;
+import jakarta.annotation.Nullable;
 
 import java.util.Optional;
 
@@ -41,17 +43,23 @@ public class PositionsAppenderFactory
 
     public UnnestingPositionsAppender create(Type type, int expectedPositions, long maxPageSizeInBytes)
     {
+        return create(type, expectedPositions, maxPageSizeInBytes, null);
+    }
+
+    /// @param borrowedBufferTracker accounts for the value buffers that the appender borrows from appended blocks
+    public UnnestingPositionsAppender create(Type type, int expectedPositions, long maxPageSizeInBytes, @Nullable BorrowedBufferTracker borrowedBufferTracker)
+    {
         Optional<BlockPositionIsIdentical> distinctFromOperator = Optional.empty();
         if (type.isComparable()) {
             distinctFromOperator = Optional.of(blockTypeOperators.getIdenticalOperator(type));
         }
-        return new UnnestingPositionsAppender(createPrimitiveAppender(type, expectedPositions, maxPageSizeInBytes), distinctFromOperator);
+        return new UnnestingPositionsAppender(createPrimitiveAppender(type, expectedPositions, maxPageSizeInBytes, borrowedBufferTracker), distinctFromOperator);
     }
 
-    private PositionsAppender createPrimitiveAppender(Type type, int expectedPositions, long maxPageSizeInBytes)
+    private PositionsAppender createPrimitiveAppender(Type type, int expectedPositions, long maxPageSizeInBytes, @Nullable BorrowedBufferTracker borrowedBufferTracker)
     {
         if (type.getValueBlockType() == RowBlock.class) {
-            return RowPositionsAppender.createRowAppender(this, (RowType) type, expectedPositions, maxPageSizeInBytes);
+            return RowPositionsAppender.createRowAppender(this, (RowType) type, expectedPositions, maxPageSizeInBytes, borrowedBufferTracker);
         }
         if (type.getValueBlockType() == VariableWidthBlock.class) {
             // it is guaranteed Math.min will not overflow; safe to cast
@@ -62,7 +70,7 @@ public class PositionsAppenderFactory
         if (type.getValueBlockType() == VariableWidthViewBlock.class) {
             // it is guaranteed Math.min will not overflow; safe to cast
             int expectedBytes = (int) min((long) expectedPositions * EXPECTED_VARIABLE_WIDTH_BYTES_PER_ENTRY, maxPageSizeInBytes);
-            return new TypedPositionsAppender(new VariableWidthViewBlockBuilder(null, expectedPositions, expectedBytes));
+            return new TypedPositionsAppender(new VariableWidthViewBlockBuilder(null, expectedPositions, expectedBytes, borrowedBufferTracker));
         }
         return new TypedPositionsAppender(type, expectedPositions);
     }

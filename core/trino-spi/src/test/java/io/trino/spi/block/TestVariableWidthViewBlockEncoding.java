@@ -210,8 +210,9 @@ final class TestVariableWidthViewBlockEncoding
         DynamicSliceOutput output = new DynamicSliceOutput(1024);
         blockEncodingSerde.writeBlock(output, block);
         // buffers are written with at most 1/8 of unreferenced bytes, and the estimate counts a length for every
-        // buffer, also when a block is compacted to a single buffer
-        assertThat((long) output.size()).isBetween(estimate * 8 / 9 - 64, estimate * 9 / 8);
+        // buffer, also when a block is compacted to a single buffer; a dictionary scales the estimate of its
+        // dictionary, including the fixed size of the header
+        assertThat((long) output.size()).isBetween(estimate * 8 / 9 - 64, estimate * 9 / 8 + 32);
     }
 
     private long serializedSize(VariableWidthViewBlock block)

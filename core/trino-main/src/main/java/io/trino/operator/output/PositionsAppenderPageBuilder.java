@@ -17,8 +17,10 @@ import com.google.common.annotations.VisibleForTesting;
 import io.trino.operator.project.PageProcessor;
 import io.trino.spi.Page;
 import io.trino.spi.block.Block;
+import io.trino.spi.block.BorrowedBufferTracker;
 import io.trino.spi.type.Type;
 import it.unimi.dsi.fastutil.ints.IntArrayList;
+import jakarta.annotation.Nullable;
 
 import java.util.List;
 import java.util.Optional;
@@ -42,13 +44,19 @@ public final class PositionsAppenderPageBuilder
 
     public static PositionsAppenderPageBuilder withMaxPageSize(int maxPageBytes, List<Type> sourceTypes, PositionsAppenderFactory positionsAppenderFactory)
     {
-        return withMaxPageSize(maxPageBytes, maxPageBytes * MAXIMUM_DIRECT_SIZE_MULTIPLIER, sourceTypes, positionsAppenderFactory);
+        return withMaxPageSize(maxPageBytes, sourceTypes, positionsAppenderFactory, null);
+    }
+
+    /// @param borrowedBufferTracker accounts for the value buffers that the appenders borrow from appended blocks
+    public static PositionsAppenderPageBuilder withMaxPageSize(int maxPageBytes, List<Type> sourceTypes, PositionsAppenderFactory positionsAppenderFactory, @Nullable BorrowedBufferTracker borrowedBufferTracker)
+    {
+        return new PositionsAppenderPageBuilder(DEFAULT_INITIAL_EXPECTED_ENTRIES, maxPageBytes, maxPageBytes * MAXIMUM_DIRECT_SIZE_MULTIPLIER, sourceTypes, positionsAppenderFactory, borrowedBufferTracker);
     }
 
     @VisibleForTesting
     static PositionsAppenderPageBuilder withMaxPageSize(int maxPageBytes, int maxDirectSizeInBytes, List<Type> sourceTypes, PositionsAppenderFactory positionsAppenderFactory)
     {
-        return new PositionsAppenderPageBuilder(DEFAULT_INITIAL_EXPECTED_ENTRIES, maxPageBytes, maxDirectSizeInBytes, sourceTypes, positionsAppenderFactory);
+        return new PositionsAppenderPageBuilder(DEFAULT_INITIAL_EXPECTED_ENTRIES, maxPageBytes, maxDirectSizeInBytes, sourceTypes, positionsAppenderFactory, null);
     }
 
     private PositionsAppenderPageBuilder(
@@ -56,7 +64,8 @@ public final class PositionsAppenderPageBuilder
             int maxPageSizeInBytes,
             int maxDirectPageSizeInBytes,
             List<? extends Type> types,
-            PositionsAppenderFactory positionsAppenderFactory)
+            PositionsAppenderFactory positionsAppenderFactory,
+            @Nullable BorrowedBufferTracker borrowedBufferTracker)
     {
         requireNonNull(types, "types is null");
         requireNonNull(positionsAppenderFactory, "positionsAppenderFactory is null");
@@ -68,7 +77,7 @@ public final class PositionsAppenderPageBuilder
         this.maxDirectPageSizeInBytes = maxDirectPageSizeInBytes;
         channelAppenders = new UnnestingPositionsAppender[types.size()];
         for (int i = 0; i < channelAppenders.length; i++) {
-            channelAppenders[i] = positionsAppenderFactory.create(types.get(i), initialExpectedEntries, maxPageSizeInBytes);
+            channelAppenders[i] = positionsAppenderFactory.create(types.get(i), initialExpectedEntries, maxPageSizeInBytes, borrowedBufferTracker);
         }
     }
 

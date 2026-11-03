@@ -21,6 +21,7 @@ import static io.trino.spi.block.EncoderUtil.encodeValidityAsLongs;
 import static io.trino.spi.block.EncoderUtil.encodedValiditySize;
 import static io.trino.spi.block.VariableWidthViewBlock.INLINE_SIZE;
 import static io.trino.spi.block.VariableWidthViewBlock.LONG_LE;
+import static io.trino.spi.block.VariableWidthViewBlock.MAX_UNREFERENCED_BYTES_DIVISOR;
 import static io.trino.spi.block.VariableWidthViewBlock.NO_BUFFERS;
 import static io.trino.spi.block.VariableWidthViewBlock.VIEW_SIZE;
 import static io.trino.spi.block.VariableWidthViewBlock.bufferIndex;
@@ -29,19 +30,19 @@ import static io.trino.spi.block.VariableWidthViewBlock.length;
 import static java.lang.Math.toIntExact;
 
 /// Serializes [VariableWidthViewBlock] in its in-memory layout, like the variadic buffers of the Arrow `BinaryView`
-/// IPC format: validity, the buffer count and lengths, the views, and the buffers. Reading a block copies the views and
-/// buffers without looking at the values.
+/// IPC format: validity, the total length of the values and of the out-of-line values, the buffer count and lengths, the
+/// views, and the buffers. Reading a block copies the views and buffers without looking at the values.
 ///
-/// Each buffer is written up to the end of the last value that references it. A block whose buffers would still hold
-/// many bytes that its views do not reference, such as a region in the middle of a larger block, is compacted while it
-/// is written, so its views reference a single buffer that holds only their values.
+/// Each buffer is written up to the end of the bytes that views of the block may reference, which the block knows, so
+/// a block with dense buffers is written without looking at its views. A block whose buffers would hold many bytes
+/// that its views do not reference, such as a region in the middle of a larger block or a block that borrows a few
+/// values of many other blocks, is compacted while it is written, so its views reference a single buffer that holds only
+/// their values.
 public class VariableWidthViewBlockEncoding
         implements BlockEncoding
 {
     public static final String NAME = "VARIABLE_WIDTH_VIEW";
 
-    // a block is compacted when the bytes its views do not reference exceed this fraction of the bytes they reference
-    private static final int MAX_UNREFERENCED_BYTES_DIVISOR = 8;
     private static final int SCRATCH_SIZE = 4096;
     private static final int MAX_GATHERED_RUN_LENGTH = 256;
 
@@ -68,50 +69,42 @@ public class VariableWidthViewBlockEncoding
         int arrayBase = viewBlock.getRawArrayBase();
         encodeValidityAsLongs(sliceOutput, viewBlock.getRawValueIsValid(), arrayBase, positionCount);
 
+        // the sizes of the values, which the reader would otherwise compute from the views
+        long valueBytes = viewBlock.getValueBytes();
+        long outOfLineBytes = viewBlock.getOutOfLineBytes();
+        sliceOutput.appendLong(valueBytes);
+        sliceOutput.appendLong(outOfLineBytes);
+
         byte[] views = viewBlock.getRawViews();
         byte[][] buffers = viewBlock.getRawBuffers();
         int start = arrayBase * VIEW_SIZE;
         int end = start + positionCount * VIEW_SIZE;
 
-        // Only the bytes of a buffer up to the end of the last value in it are written, so the views stay valid and
-        // the unused end of the last buffer of a builder is not written. A value repeated by a builder is counted once
-        // for every view, so the block is not compacted, which would copy the value for every view.
-        long referencedBytes = 0;
-        int[] bufferEnds = new int[buffers.length];
-        for (int view = start; view < end; view += VIEW_SIZE) {
-            int length = length(views, view);
-            if (length > INLINE_SIZE) {
-                referencedBytes += length;
-                int bufferIndex = bufferIndex(views, view);
-                bufferEnds[bufferIndex] = Math.max(bufferEnds[bufferIndex], bufferOffset(views, view) + length);
-            }
-        }
-        long writtenBytes = 0;
-        for (int bufferEnd : bufferEnds) {
-            writtenBytes += bufferEnd;
-        }
-
-        if (referencedBytes == 0) {
+        if (outOfLineBytes == 0) {
             // only inline values, which have no buffer location to update
             sliceOutput.appendInt(0);
             sliceOutput.writeBytes(views, start, end - start);
             return;
         }
 
-        if (writtenBytes - referencedBytes <= referencedBytes / MAX_UNREFERENCED_BYTES_DIVISOR) {
+        // Only the bytes of a buffer that views of the block may reference are written, so the views stay valid and
+        // the unused end of the last buffer of a builder is not written. A value repeated by a builder is counted once
+        // for every view, so the block is not compacted, which would copy the value for every view.
+        if (viewBlock.getUsedBufferBytes() - outOfLineBytes <= outOfLineBytes / MAX_UNREFERENCED_BYTES_DIVISOR) {
+            int[] bufferLengths = viewBlock.getRawBufferLengths();
             sliceOutput.appendInt(buffers.length);
-            for (int bufferEnd : bufferEnds) {
-                sliceOutput.appendInt(bufferEnd);
+            for (int bufferLength : bufferLengths) {
+                sliceOutput.appendInt(bufferLength);
             }
             sliceOutput.writeBytes(views, start, end - start);
             for (int i = 0; i < buffers.length; i++) {
-                sliceOutput.writeBytes(buffers[i], 0, bufferEnds[i]);
+                sliceOutput.writeBytes(buffers[i], 0, bufferLengths[i]);
             }
             return;
         }
 
         sliceOutput.appendInt(1);
-        sliceOutput.appendInt(toIntExact(referencedBytes));
+        sliceOutput.appendInt(toIntExact(outOfLineBytes));
         byte[] scratch = new byte[Math.min(end - start, SCRATCH_SIZE)];
         writeCompactedViews(sliceOutput, views, start, end, scratch);
         writeReferencedBytes(sliceOutput, views, start, end, buffers, scratch);
@@ -122,17 +115,13 @@ public class VariableWidthViewBlockEncoding
     {
         VariableWidthViewBlock viewBlock = (VariableWidthViewBlock) block;
         int positionCount = viewBlock.getPositionCount();
-        byte[][] buffers = viewBlock.getRawBuffers();
         // a value that several views share is written once, so no more than the buffers hold is written
-        long bufferBytes = 0;
-        for (byte[] buffer : buffers) {
-            bufferBytes += buffer.length;
-        }
         return Integer.BYTES
                 + encodedValiditySize(viewBlock.getRawValueIsValid(), positionCount)
-                + Integer.BYTES * (1L + buffers.length)
+                + Long.BYTES * 2L
+                + Integer.BYTES * (1L + viewBlock.getRawBuffers().length)
                 + VIEW_SIZE * (long) positionCount
-                + Math.min(viewBlock.getOutOfLineBytes(), bufferBytes);
+                + Math.min(viewBlock.getOutOfLineBytes(), viewBlock.getUsedBufferBytes());
     }
 
     @Override
@@ -140,6 +129,11 @@ public class VariableWidthViewBlockEncoding
     {
         int positionCount = sliceInput.readInt();
         long[] valueIsValid = decodeValidityAsLongs(sliceInput, positionCount);
+        long valueBytes = sliceInput.readLong();
+        long outOfLineBytes = sliceInput.readLong();
+        if (outOfLineBytes < 0 || valueBytes < outOfLineBytes) {
+            throw new IllegalArgumentException("Invalid value sizes");
+        }
 
         int bufferCount = sliceInput.readInt();
         if (bufferCount < 0) {
@@ -155,7 +149,7 @@ public class VariableWidthViewBlockEncoding
         for (byte[] buffer : buffers) {
             sliceInput.readBytes(buffer);
         }
-        return new VariableWidthViewBlock(0, positionCount, views, buffers, valueIsValid);
+        return new VariableWidthViewBlock(0, positionCount, views, buffers, null, valueIsValid, valueBytes, outOfLineBytes);
     }
 
     /// Writes the views, pointing the views of out-of-line values at consecutive offsets of a single buffer.
