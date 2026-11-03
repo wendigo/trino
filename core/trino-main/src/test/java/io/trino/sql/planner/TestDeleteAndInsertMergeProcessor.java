@@ -41,7 +41,6 @@ import static io.trino.spi.connector.ConnectorMergeSink.UPDATE_OPERATION_NUMBER;
 import static io.trino.spi.type.BigintType.BIGINT;
 import static io.trino.spi.type.IntegerType.INTEGER;
 import static io.trino.spi.type.TinyintType.TINYINT;
-import static io.trino.spi.type.VarbinaryType.VARBINARY;
 import static io.trino.spi.type.VarcharType.VARCHAR;
 import static org.assertj.core.api.Assertions.assertThat;
 
@@ -211,7 +210,7 @@ Page[positions=8 0:Dict[VarWidth["Aaron", "Dave", "Dave", "Ed", "Aaron", "Carol"
 
     private String getString(Block block, int position)
     {
-        return VARBINARY.getSlice(block, position).toString(Charset.defaultCharset());
+        return VARCHAR.getSlice(block, position).toString(Charset.defaultCharset());
     }
 
     private static long readRowId(RowBlock rowIdBlock, int position)

@@ -37,6 +37,7 @@ import io.trino.sql.planner.Symbol;
 import io.trino.type.CharVarcharCoercion;
 import org.junit.jupiter.api.Test;
 
+import java.util.Arrays;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -286,7 +287,7 @@ public class TestPageProcessorCompiler
         for (int i = 0; i < positionCount; i++) {
             ids[i] = i % dictionarySize;
         }
-        return DictionaryBlock.create(ids.length, createSlicesBlock(expectedValues), ids);
+        return DictionaryBlock.create(ids.length, createSlicesBlock(VARCHAR, Arrays.asList(expectedValues)), ids);
     }
 
     private static Slice[] createExpectedValues(int positionCount)

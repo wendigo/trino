@@ -36,7 +36,7 @@ import io.trino.operator.join.nonspilling.JoinTestUtils.TestInternalJoinFilterFu
 import io.trino.spi.Page;
 import io.trino.spi.block.LongArrayBlock;
 import io.trino.spi.block.RunLengthEncodedBlock;
-import io.trino.spi.block.VariableWidthBlock;
+import io.trino.spi.block.VariableWidthViewBlock;
 import io.trino.spi.type.Type;
 import io.trino.spi.type.TypeOperators;
 import io.trino.sql.planner.PartitionFunctionProvider;
@@ -187,14 +187,14 @@ public class TestHashJoinOperator
 
         assertThat(pages).hasSize(2);
         if (withFilter) {
-            assertThat(pages.get(0).getBlock(2)).isInstanceOf(VariableWidthBlock.class);
+            assertThat(pages.get(0).getBlock(2)).isInstanceOf(VariableWidthViewBlock.class);
             assertThat(pages.get(0).getBlock(3)).isInstanceOf(LongArrayBlock.class);
         }
         else {
             assertThat(pages.get(0).getBlock(2)).isInstanceOf(RunLengthEncodedBlock.class);
             assertThat(pages.get(0).getBlock(3)).isInstanceOf(RunLengthEncodedBlock.class);
         }
-        assertThat(pages.get(1).getBlock(2)).isInstanceOf(VariableWidthBlock.class);
+        assertThat(pages.get(1).getBlock(2)).isInstanceOf(VariableWidthViewBlock.class);
 
         assertThat(getJoinOperatorInfo(driverContext).getRleProbes()).isEqualTo(withFilter ? 0 : 2);
         assertThat(getJoinOperatorInfo(driverContext).getTotalProbes()).isEqualTo(3);

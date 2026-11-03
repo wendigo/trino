@@ -225,6 +225,13 @@ public abstract class AbstractTestBlock
                 else if (type == byte[].class) {
                     retainedSize += sizeOf((byte[]) field.get(block));
                 }
+                else if (type == byte[][].class) {
+                    byte[][] arrays = (byte[][]) field.get(block);
+                    retainedSize += sizeOf(arrays);
+                    for (byte[] array : arrays) {
+                        retainedSize += sizeOf(array);
+                    }
+                }
                 else if (type == long[].class) {
                     retainedSize += sizeOf((long[]) field.get(block));
                 }

@@ -83,7 +83,7 @@ import io.trino.spi.block.RowBlockBuilder;
 import io.trino.spi.block.RunLengthEncodedBlock;
 import io.trino.spi.block.SqlMap;
 import io.trino.spi.block.SqlRow;
-import io.trino.spi.block.VariableWidthBlock;
+import io.trino.spi.block.VariableWidthViewBlock;
 import io.trino.spi.connector.ColumnHandle;
 import io.trino.spi.connector.ConnectorPageSource;
 import io.trino.spi.connector.ConnectorPageSourceProvider;
@@ -2051,14 +2051,14 @@ public class IcebergPageSourceProvider
     }
 
     private record MergeRowIdTransform(
-            VariableWidthBlock filePath,
+            VariableWidthViewBlock filePath,
             IntArrayBlock partitionSpecId,
-            VariableWidthBlock partitionData,
+            VariableWidthViewBlock partitionData,
             OptionalLong fileFirstRowId,
             Integer sourceRowIdChannel,
             LongArrayBlock fileRecordCount,
             LongArrayBlock fileSize,
-            VariableWidthBlock fileFormat)
+            VariableWidthViewBlock fileFormat)
             implements Function<SourcePage, Block>
     {
         private static Function<SourcePage, Block> create(
@@ -2073,14 +2073,14 @@ public class IcebergPageSourceProvider
         {
             Slice fileFormatName = utf8Slice(fileFormat.name());
             return new MergeRowIdTransform(
-                    new VariableWidthBlock(1, filePath, new int[] {0, filePath.length()}, Optional.empty()),
+                    VariableWidthViewBlock.fromOffsets(1, filePath, new int[] {0, filePath.length()}, Optional.empty()),
                     new IntArrayBlock(1, Optional.empty(), new int[] {partitionSpecId}),
-                    new VariableWidthBlock(1, partitionData, new int[] {0, partitionData.length()}, Optional.empty()),
+                    VariableWidthViewBlock.fromOffsets(1, partitionData, new int[] {0, partitionData.length()}, Optional.empty()),
                     fileFirstRowId,
                     sourceRowIdChannel,
                     new LongArrayBlock(1, Optional.empty(), new long[] {fileRecordCount}),
                     new LongArrayBlock(1, Optional.empty(), new long[] {fileSize}),
-                    new VariableWidthBlock(1, fileFormatName, new int[] {0, fileFormatName.length()}, Optional.empty()));
+                    VariableWidthViewBlock.fromOffsets(1, fileFormatName, new int[] {0, fileFormatName.length()}, Optional.empty()));
         }
 
         @Override

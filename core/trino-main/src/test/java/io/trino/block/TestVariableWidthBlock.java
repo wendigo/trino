@@ -18,7 +18,6 @@ import io.trino.spi.block.Block;
 import io.trino.spi.block.BlockBuilder;
 import io.trino.spi.block.VariableWidthBlock;
 import io.trino.spi.block.VariableWidthBlockBuilder;
-import io.trino.spi.type.VarcharType;
 import org.junit.jupiter.api.Test;
 
 import java.util.List;
@@ -26,7 +25,7 @@ import java.util.Optional;
 import java.util.concurrent.ThreadLocalRandom;
 
 import static io.airlift.slice.Slices.EMPTY_SLICE;
-import static io.trino.spi.type.VarcharType.createUnboundedVarcharType;
+import static io.airlift.slice.Slices.utf8Slice;
 import static java.lang.String.format;
 import static java.util.Arrays.copyOfRange;
 import static org.assertj.core.api.Assertions.assertThat;
@@ -87,10 +86,9 @@ public class TestVariableWidthBlock
     public void testGetSizeInBytes()
     {
         int numEntries = 1000;
-        VarcharType unboundedVarcharType = createUnboundedVarcharType();
         VariableWidthBlockBuilder blockBuilder = new VariableWidthBlockBuilder(null, numEntries, 20 * numEntries);
         for (int i = 0; i < numEntries; i++) {
-            unboundedVarcharType.writeString(blockBuilder, String.valueOf(ThreadLocalRandom.current().nextLong()));
+            blockBuilder.writeEntry(utf8Slice(String.valueOf(ThreadLocalRandom.current().nextLong())));
         }
         Block block = blockBuilder.build();
 

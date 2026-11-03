@@ -19,7 +19,7 @@ import io.trino.spi.Page;
 import io.trino.spi.block.Block;
 import io.trino.spi.block.DictionaryBlock;
 import io.trino.spi.block.RunLengthEncodedBlock;
-import io.trino.spi.block.VariableWidthBlockBuilder;
+import io.trino.spi.block.VariableWidthViewBlockBuilder;
 import io.trino.spi.type.Type;
 import io.trino.testing.MaterializedResult;
 import org.junit.jupiter.api.Test;
@@ -79,7 +79,7 @@ public class TestPageSplitterUtil
         List<Type> types = ImmutableList.of(VARCHAR);
 
         Slice expectedValue = wrappedBuffer("test".getBytes(UTF_8));
-        VariableWidthBlockBuilder blockBuilder = VARCHAR.createBlockBuilder(null, 1, expectedValue.length());
+        VariableWidthViewBlockBuilder blockBuilder = VARCHAR.createBlockBuilder(null, 1, expectedValue.length());
         blockBuilder.writeEntry(expectedValue);
         Block rleBlock = RunLengthEncodedBlock.create(blockBuilder.build(), positionCount);
         Page initialPage = new Page(rleBlock);
@@ -154,7 +154,7 @@ public class TestPageSplitterUtil
 
     private static Page createDictionaryPage(int dictionarySize, int positionCount)
     {
-        VariableWidthBlockBuilder dictionaryBuilder = VARCHAR.createBlockBuilder(null, dictionarySize, dictionarySize * 100);
+        VariableWidthViewBlockBuilder dictionaryBuilder = VARCHAR.createBlockBuilder(null, dictionarySize, dictionarySize * 100);
         for (int entry = 0; entry < dictionarySize; entry++) {
             dictionaryBuilder.writeEntry(wrappedBuffer(String.valueOf(entry % 10).repeat(100).getBytes(UTF_8)));
         }

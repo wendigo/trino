@@ -61,6 +61,7 @@ import static io.trino.parquet.reader.flat.IntColumnAdapter.INT_ADAPTER;
 import static io.trino.parquet.reader.flat.JsonColumnAdapter.JSON_ADAPTER;
 import static io.trino.parquet.reader.flat.LongColumnAdapter.LONG_ADAPTER;
 import static io.trino.parquet.reader.flat.ShortColumnAdapter.SHORT_ADAPTER;
+import static io.trino.parquet.reader.flat.VarcharColumnAdapter.VARCHAR_ADAPTER;
 import static io.trino.spi.StandardErrorCode.NOT_SUPPORTED;
 import static io.trino.spi.type.BigintType.BIGINT;
 import static io.trino.spi.type.BooleanType.BOOLEAN;
@@ -262,13 +263,16 @@ public final class ColumnReaderFactory
             return createColumnReader(field, valueDecoders::getLongDecimalDecoder, INT128_ADAPTER, memoryContext);
         }
         if (type instanceof VarcharType varcharType && !varcharType.isUnbounded() && primitiveType == BINARY) {
-            return createColumnReader(field, valueDecoders::getBoundedVarcharBinaryDecoder, BINARY_ADAPTER, memoryContext);
+            return createColumnReader(field, valueDecoders::getBoundedVarcharBinaryDecoder, VARCHAR_ADAPTER, memoryContext);
         }
         if (type instanceof CharType && primitiveType == BINARY) {
             return createColumnReader(field, valueDecoders::getCharBinaryDecoder, BINARY_ADAPTER, memoryContext);
         }
         if (type.getBaseName().equals(JSON) && primitiveType == BINARY) {
             return createColumnReader(field, valueDecoders::getBinaryDecoder, JSON_ADAPTER, memoryContext);
+        }
+        if (type instanceof VarcharType && primitiveType == BINARY) {
+            return createColumnReader(field, valueDecoders::getBinaryDecoder, VARCHAR_ADAPTER, memoryContext);
         }
         if (type instanceof AbstractVariableWidthType && primitiveType == BINARY) {
             return createColumnReader(field, valueDecoders::getBinaryDecoder, BINARY_ADAPTER, memoryContext);
@@ -277,7 +281,7 @@ public final class ColumnReaderFactory
             if (annotation instanceof DecimalLogicalTypeAnnotation) {
                 throw unsupportedException(type, field);
             }
-            return createColumnReader(field, valueDecoders::getFixedWidthBinaryDecoder, BINARY_ADAPTER, memoryContext);
+            return createColumnReader(field, valueDecoders::getFixedWidthBinaryDecoder, VARCHAR.equals(type) ? VARCHAR_ADAPTER : BINARY_ADAPTER, memoryContext);
         }
         if (UUID.equals(type) && primitiveType == FIXED_LEN_BYTE_ARRAY) {
             // Iceberg 0.11.1 writes UUID as FIXED_LEN_BYTE_ARRAY without logical type annotation (see https://github.com/apache/iceberg/pull/2913)

@@ -16,6 +16,7 @@ package io.trino.parquet.writer.valuewriter;
 import io.airlift.slice.Slice;
 import io.trino.spi.block.ValueBlock;
 import io.trino.spi.block.VariableWidthBlock;
+import io.trino.spi.block.VariableWidthViewBlock;
 import org.apache.parquet.column.statistics.Statistics;
 import org.apache.parquet.io.api.Binary;
 import org.apache.parquet.schema.PrimitiveType;
@@ -31,6 +32,16 @@ public class BinaryValueWriter
     @Override
     protected void writeValueBlock(ValueBlock block)
     {
+        if (block instanceof VariableWidthViewBlock viewBlock) {
+            boolean mayHaveNull = block.mayHaveNull();
+            for (int i = 0; i < block.getPositionCount(); i++) {
+                if (!mayHaveNull || !block.isNull(i)) {
+                    writeSlice(viewBlock.getSlice(i));
+                }
+            }
+            return;
+        }
+
         ValuesWriter valuesWriter = getValuesWriter();
         Statistics<?> statistics = getStatistics();
         VariableWidthBlock variableWidthBlock = (VariableWidthBlock) block;
@@ -57,7 +68,10 @@ public class BinaryValueWriter
     {
         ValuesWriter valuesWriter = getValuesWriter();
         Statistics<?> statistics = getStatistics();
-        Slice slice = ((VariableWidthBlock) block).getSlice(0);
+        Slice slice = switch (block) {
+            case VariableWidthViewBlock viewBlock -> viewBlock.getSlice(0);
+            default -> ((VariableWidthBlock) block).getSlice(0);
+        };
         for (int i = 0; i < count; i++) {
             valuesWriter.writeBytes(slice);
         }
@@ -69,6 +83,17 @@ public class BinaryValueWriter
     @Override
     protected void writePositions(ValueBlock block, int[] positions, int offset, int length)
     {
+        if (block instanceof VariableWidthViewBlock viewBlock) {
+            boolean mayHaveNull = block.mayHaveNull();
+            for (int index = 0; index < length; index++) {
+                int position = positions[offset + index];
+                if (!mayHaveNull || !block.isNull(position)) {
+                    writeSlice(viewBlock.getSlice(position));
+                }
+            }
+            return;
+        }
+
         ValuesWriter valuesWriter = getValuesWriter();
         Statistics<?> statistics = getStatistics();
         VariableWidthBlock variableWidthBlock = (VariableWidthBlock) block;
@@ -89,5 +114,13 @@ public class BinaryValueWriter
                 statistics.updateStats(Binary.fromReusedByteArray(rawByteArray, rawByteArrayOffset + sliceOffset, sliceLength));
             }
         }
+    }
+
+    private void writeSlice(Slice value)
+    {
+        getValuesWriter().writeBytes(value);
+        // fromReusedByteArray must be used instead of fromConstantByteArray to avoid retaining entire
+        // base byte array of the Slice in DictionaryValuesWriter.PlainBinaryDictionaryValuesWriter
+        getStatistics().updateStats(Binary.fromReusedByteArray(value.byteArray(), value.byteArrayOffset(), value.length()));
     }
 }

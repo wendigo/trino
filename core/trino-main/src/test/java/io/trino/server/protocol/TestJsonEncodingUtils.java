@@ -433,7 +433,7 @@ public class TestJsonEncodingUtils
 
         blockBuilder.buildEntry(builder -> {
             for (int i = 0; i < 5; i++) {
-                VARCHAR.writeSlice(builder, utf8Slice("kot" + i));
+                charType.writeSlice(builder, utf8Slice("kot" + i));
             }
             builder.appendNull();
         });

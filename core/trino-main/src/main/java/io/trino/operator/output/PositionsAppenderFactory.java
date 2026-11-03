@@ -16,6 +16,8 @@ package io.trino.operator.output;
 import io.trino.spi.block.RowBlock;
 import io.trino.spi.block.VariableWidthBlock;
 import io.trino.spi.block.VariableWidthBlockBuilder;
+import io.trino.spi.block.VariableWidthViewBlock;
+import io.trino.spi.block.VariableWidthViewBlockBuilder;
 import io.trino.spi.type.RowType;
 import io.trino.spi.type.Type;
 import io.trino.type.BlockTypeOperators;
@@ -56,6 +58,11 @@ public class PositionsAppenderFactory
             int expectedBytes = (int) min((long) expectedPositions * EXPECTED_VARIABLE_WIDTH_BYTES_PER_ENTRY, maxPageSizeInBytes);
             expectedBytes = min(expectedBytes, MAX_ARRAY_SIZE);
             return new TypedPositionsAppender(new VariableWidthBlockBuilder(null, expectedPositions, expectedBytes));
+        }
+        if (type.getValueBlockType() == VariableWidthViewBlock.class) {
+            // it is guaranteed Math.min will not overflow; safe to cast
+            int expectedBytes = (int) min((long) expectedPositions * EXPECTED_VARIABLE_WIDTH_BYTES_PER_ENTRY, maxPageSizeInBytes);
+            return new TypedPositionsAppender(new VariableWidthViewBlockBuilder(null, expectedPositions, expectedBytes));
         }
         return new TypedPositionsAppender(type, expectedPositions);
     }

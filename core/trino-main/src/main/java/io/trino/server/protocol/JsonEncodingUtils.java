@@ -123,7 +123,7 @@ public final class JsonEncodingUtils
             case VarcharType _ -> VARCHAR_ENCODER;
             case VarbinaryType _ -> VARBINARY_ENCODER;
             case JsonType _ -> JSON_ENCODER;
-            case CharType charType -> new CharEncoder(charType.getLength());
+            case CharType charType -> new CharEncoder(charType);
             case VariantType _ -> new VariantEncoder(supportsVariant, supportsVariantBinary);
             // TODO: add specialized Short/Long decimal encoders
             case ArrayType arrayType -> new ArrayEncoder(arrayType, createTypeEncoder(arrayType.getElementType(), supportsParametricDateTime, supportsParametricInterval, supportsVariant, supportsVariantBinary));
@@ -296,11 +296,11 @@ public final class JsonEncodingUtils
     private static final class CharEncoder
             implements TypeEncoder
     {
-        private final int length;
+        private final CharType type;
 
-        private CharEncoder(int length)
+        private CharEncoder(CharType type)
         {
-            this.length = length;
+            this.type = type;
         }
 
         @Override
@@ -311,7 +311,7 @@ public final class JsonEncodingUtils
                 generator.writeNull();
                 return;
             }
-            Slice slice = padSpaces(VARCHAR.getSlice(block, position), length);
+            Slice slice = padSpaces(type.getSlice(block, position), type.getLength());
             generator.writeString(slice.toStringUtf8());
         }
     }

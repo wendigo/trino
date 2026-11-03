@@ -14,7 +14,6 @@
 package io.trino.spi.block;
 
 import io.airlift.slice.Slice;
-import io.airlift.slice.Slices;
 import jakarta.annotation.Nullable;
 
 import java.util.Arrays;
@@ -31,18 +30,17 @@ import static io.trino.spi.block.BlockUtil.MAX_ARRAY_SIZE;
 import static io.trino.spi.block.BlockUtil.calculateNewArraySize;
 import static io.trino.spi.block.BlockUtil.checkValidArrayGrowth;
 import static io.trino.spi.block.VariableWidthViewBlock.INLINE_SIZE;
-import static io.trino.spi.block.VariableWidthViewBlock.INT_LE;
+import static io.trino.spi.block.VariableWidthViewBlock.LONG_LE;
 import static io.trino.spi.block.VariableWidthViewBlock.NO_BUFFERS;
-import static io.trino.spi.block.VariableWidthViewBlock.PREFIX_SIZE;
 import static io.trino.spi.block.VariableWidthViewBlock.VIEW_SIZE;
-import static io.trino.spi.block.VariableWidthViewBlock.bufferIndex;
-import static io.trino.spi.block.VariableWidthViewBlock.bufferOffset;
 import static io.trino.spi.block.VariableWidthViewBlock.length;
-import static io.trino.spi.block.VariableWidthViewBlock.setBufferLocation;
+import static io.trino.spi.block.VariableWidthViewBlock.writeInlineView;
+import static io.trino.spi.block.VariableWidthViewBlock.writeOutOfLineView;
 import static java.lang.Math.clamp;
 import static java.lang.Math.max;
 import static java.lang.Math.min;
 import static java.lang.Math.toIntExact;
+import static java.util.Objects.checkFromIndexSize;
 import static java.util.Objects.checkIndex;
 
 /// Builds [VariableWidthViewBlock]s. Values longer than [VariableWidthViewBlock#INLINE_SIZE] bytes are appended to
@@ -118,34 +116,31 @@ public class VariableWidthViewBlockBuilder
 
     public VariableWidthViewBlockBuilder writeEntry(Slice source, int sourceIndex, int length)
     {
-        int view = startEntry();
-        INT_LE.set(views, view, length);
-        if (length <= INLINE_SIZE) {
-            source.getBytes(sourceIndex, views, view + Integer.BYTES, length);
-        }
-        else {
-            source.getBytes(sourceIndex, views, view + Integer.BYTES, PREFIX_SIZE);
-            int bufferOffset = reserve(view, length);
-            source.getBytes(sourceIndex, buffers[bufferCount - 1], bufferOffset, length);
-        }
-        entryAdded(length, false);
+        checkFromIndexSize(sourceIndex, length, source.length());
+        writeValue(source.byteArray(), source.byteArrayOffset() + sourceIndex, length);
         return this;
     }
 
     public VariableWidthViewBlockBuilder writeEntry(byte[] source, int sourceIndex, int length)
     {
-        int view = startEntry();
-        INT_LE.set(views, view, length);
+        checkFromIndexSize(sourceIndex, length, source.length);
+        writeValue(source, sourceIndex, length);
+        return this;
+    }
+
+    private void writeValue(byte[] source, int sourceIndex, int length)
+    {
+        ensureCapacity(positionCount + 1);
+        int view = positionCount * VIEW_SIZE;
         if (length <= INLINE_SIZE) {
-            System.arraycopy(source, sourceIndex, views, view + Integer.BYTES, length);
+            writeInlineView(views, view, source, sourceIndex, length);
         }
         else {
-            System.arraycopy(source, sourceIndex, views, view + Integer.BYTES, PREFIX_SIZE);
-            int bufferOffset = reserve(view, length);
+            int bufferOffset = reserve(length);
             System.arraycopy(source, sourceIndex, buffers[bufferCount - 1], bufferOffset, length);
+            writeOutOfLineView(views, view, source, sourceIndex, length, bufferCount - 1, bufferOffset);
         }
         entryAdded(length, false);
-        return this;
     }
 
     @Override
@@ -156,8 +151,8 @@ public class VariableWidthViewBlockBuilder
             appendNull();
             return;
         }
-        int view = startEntry();
-        int length = copyValue(viewBlock, position, view);
+        ensureCapacity(positionCount + 1);
+        int length = copyValue(viewBlock, position, positionCount * VIEW_SIZE);
         entryAdded(length, false);
     }
 
@@ -165,9 +160,31 @@ public class VariableWidthViewBlockBuilder
     public void appendRepeated(ValueBlock block, int position, int count)
     {
         VariableWidthViewBlock viewBlock = (VariableWidthViewBlock) block;
-        for (int i = 0; i < count; i++) {
-            append(viewBlock, position);
+        if (count == 0) {
+            return;
         }
+        if (viewBlock.isNull(position)) {
+            for (int i = 0; i < count; i++) {
+                appendNull();
+            }
+            return;
+        }
+        ensureCapacity(positionCount + count);
+        // the views share a single copy of an out-of-line value
+        int firstView = positionCount * VIEW_SIZE;
+        int length = copyValue(viewBlock, position, firstView);
+        long lengthAndPrefix = (long) LONG_LE.get(views, firstView);
+        long location = (long) LONG_LE.get(views, firstView + Long.BYTES);
+        for (int i = 1; i < count; i++) {
+            int view = firstView + i * VIEW_SIZE;
+            LONG_LE.set(views, view, lengthAndPrefix);
+            LONG_LE.set(views, view + Long.BYTES, location);
+        }
+        if (valueIsValid != null) {
+            setBits(valueIsValid, 0, positionCount, count);
+        }
+        hasNonNullValue = true;
+        entriesAdded(count, length * (long) count);
     }
 
     @Override
@@ -181,13 +198,10 @@ public class VariableWidthViewBlockBuilder
 
         long[] rawValueIsValid = viewBlock.getRawValueIsValid();
         int rawArrayBase = viewBlock.getRawArrayBase();
+        // null positions have empty views, so they are copied like any other value
         long addedBytes = 0;
         for (int i = 0; i < length; i++) {
-            int view = (positionCount + i) * VIEW_SIZE;
-            Arrays.fill(views, view, view + VIEW_SIZE, (byte) 0);
-            if (rawValueIsValid == null || Bitmap.isSet(rawValueIsValid, rawArrayBase, offset + i)) {
-                addedBytes += copyValue(viewBlock, offset + i, view);
-            }
+            addedBytes += copyValue(viewBlock, offset + i, (positionCount + i) * VIEW_SIZE);
         }
         if (rawValueIsValid == null || !hasUnsetBit(rawValueIsValid, rawArrayBase + offset, length)) {
             if (valueIsValid != null) {
@@ -215,14 +229,10 @@ public class VariableWidthViewBlockBuilder
 
         long[] rawValueIsValid = viewBlock.getRawValueIsValid();
         int rawArrayBase = viewBlock.getRawArrayBase();
+        // null positions have empty views, so they are copied like any other value
         long addedBytes = 0;
         for (int i = 0; i < length; i++) {
-            int view = (positionCount + i) * VIEW_SIZE;
-            Arrays.fill(views, view, view + VIEW_SIZE, (byte) 0);
-            int position = positions[offset + i];
-            if (rawValueIsValid == null || Bitmap.isSet(rawValueIsValid, rawArrayBase, position)) {
-                addedBytes += copyValue(viewBlock, position, view);
-            }
+            addedBytes += copyValue(viewBlock, positions[offset + i], (positionCount + i) * VIEW_SIZE);
         }
         if (rawValueIsValid == null || !hasUnsetBit(rawValueIsValid, rawArrayBase, positions, offset, length)) {
             if (valueIsValid != null) {
@@ -242,7 +252,10 @@ public class VariableWidthViewBlockBuilder
     @Override
     public BlockBuilder appendNull()
     {
-        startEntry();
+        ensureCapacity(positionCount + 1);
+        int view = positionCount * VIEW_SIZE;
+        LONG_LE.set(views, view, 0L);
+        LONG_LE.set(views, view + Long.BYTES, 0L);
         hasNullValue = true;
         entryAdded(0, true);
         return this;
@@ -276,14 +289,8 @@ public class VariableWidthViewBlockBuilder
     @Override
     public VariableWidthViewBlock buildValueBlock()
     {
-        Slice[] slices = NO_BUFFERS;
-        if (bufferCount > 0) {
-            slices = new Slice[bufferCount];
-            for (int i = 0; i < bufferCount; i++) {
-                slices[i] = Slices.wrappedBuffer(buffers[i], 0, bufferLengths[i]);
-            }
-        }
-        return new VariableWidthViewBlock(0, positionCount, views, slices, hasNullValue ? valueIsValid : null);
+        byte[][] blockBuffers = bufferCount == 0 ? NO_BUFFERS : Arrays.copyOf(buffers, bufferCount);
+        return new VariableWidthViewBlock(0, positionCount, views, blockBuffers, hasNullValue ? valueIsValid : null);
     }
 
     @Override
@@ -299,28 +306,24 @@ public class VariableWidthViewBlockBuilder
         return "VariableWidthViewBlockBuilder{positionCount=" + positionCount + ", size=" + valueBytes + '}';
     }
 
-    /// Copies the value at `position` into the zeroed view at `view` and returns its length.
+    /// Copies the view of `position` to `view`, copying an out-of-line value to the buffers of this builder, and
+    /// returns the length of the value.
     private int copyValue(VariableWidthViewBlock source, int position, int view)
     {
         byte[] sourceViews = source.getRawViews();
         int sourceView = (source.getRawArrayBase() + position) * VIEW_SIZE;
-        System.arraycopy(sourceViews, sourceView, views, view, VIEW_SIZE);
-        int length = length(sourceViews, sourceView);
+        long lengthAndPrefix = (long) LONG_LE.get(sourceViews, sourceView);
+        long location = (long) LONG_LE.get(sourceViews, sourceView + Long.BYTES);
+        int length = (int) lengthAndPrefix;
         if (length > INLINE_SIZE) {
-            Slice sourceBuffer = source.getRawBuffers()[bufferIndex(sourceViews, sourceView)];
-            int bufferOffset = reserve(view, length);
-            sourceBuffer.getBytes(bufferOffset(sourceViews, sourceView), buffers[bufferCount - 1], bufferOffset, length);
+            byte[] sourceBuffer = source.getRawBuffers()[(int) location];
+            int bufferOffset = reserve(length);
+            System.arraycopy(sourceBuffer, (int) (location >>> Integer.SIZE), buffers[bufferCount - 1], bufferOffset, length);
+            location = ((bufferCount - 1) & 0xFFFF_FFFFL) | ((long) bufferOffset << Integer.SIZE);
         }
+        LONG_LE.set(views, view, lengthAndPrefix);
+        LONG_LE.set(views, view + Long.BYTES, location);
         return length;
-    }
-
-    /// Ensures capacity for one more entry, zeroes its view and returns the view offset.
-    private int startEntry()
-    {
-        ensureCapacity(positionCount + 1);
-        int view = positionCount * VIEW_SIZE;
-        Arrays.fill(views, view, view + VIEW_SIZE, (byte) 0);
-        return view;
     }
 
     private void entryAdded(int length, boolean isNull)
@@ -347,9 +350,9 @@ public class VariableWidthViewBlockBuilder
         }
     }
 
-    /// Reserves `length` bytes in the current buffer for the value of `view`, records the location in the view,
-    /// and returns the offset of the reserved bytes in the last buffer.
-    private int reserve(int view, int length)
+    /// Reserves `length` bytes at the end of the buffers and returns the offset of the reserved bytes in the last
+    /// buffer.
+    private int reserve(int length)
     {
         if (bufferCount == 0 || buffers[bufferCount - 1].length - bufferLengths[bufferCount - 1] < length) {
             newBuffer(length);
@@ -357,7 +360,6 @@ public class VariableWidthViewBlockBuilder
         int bufferIndex = bufferCount - 1;
         int bufferOffset = bufferLengths[bufferIndex];
         bufferLengths[bufferIndex] += length;
-        setBufferLocation(views, view, bufferIndex, bufferOffset);
         outOfLineBytes += length;
         return bufferOffset;
     }

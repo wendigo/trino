@@ -14,6 +14,7 @@
 package io.trino.operator.output;
 
 import com.google.common.collect.ImmutableList;
+import io.airlift.slice.DynamicSliceOutput;
 import io.airlift.slice.Slices;
 import io.trino.block.BlockAssertions;
 import io.trino.spi.block.ArrayBlock;
@@ -23,7 +24,7 @@ import io.trino.spi.block.DictionaryBlock;
 import io.trino.spi.block.RowBlock;
 import io.trino.spi.block.RunLengthEncodedBlock;
 import io.trino.spi.block.ValueBlock;
-import io.trino.spi.block.VariableWidthBlock;
+import io.trino.spi.block.VariableWidthViewBlock;
 import io.trino.spi.type.ArrayType;
 import io.trino.spi.type.BigintType;
 import io.trino.spi.type.BooleanType;
@@ -157,7 +158,7 @@ public class TestPositionsAppender
         testMultipleRleBlocksWithDifferentValues(TestType.BIGINT, createLongsBlock(0), createLongsBlock(1));
         testMultipleRleBlocksWithDifferentValues(TestType.BOOLEAN, createBooleansBlock(true), createBooleansBlock(false));
         testMultipleRleBlocksWithDifferentValues(TestType.INTEGER, createIntsBlock(0), createIntsBlock(1));
-        testMultipleRleBlocksWithDifferentValues(TestType.CHAR_10, createStringsBlock("0"), createStringsBlock("1"));
+        testMultipleRleBlocksWithDifferentValues(TestType.CHAR_10, createSlicesBlock(Slices.utf8Slice("0")), createSlicesBlock(Slices.utf8Slice("1")));
         testMultipleRleBlocksWithDifferentValues(TestType.VARCHAR, createStringsBlock("0"), createStringsBlock("1"));
         testMultipleRleBlocksWithDifferentValues(TestType.DOUBLE, createDoublesBlock(0.0), createDoublesBlock(1.0));
         testMultipleRleBlocksWithDifferentValues(TestType.SMALLINT, createSmallintsBlock(0), createSmallintsBlock(1));
@@ -720,28 +721,31 @@ public class TestPositionsAppender
         return TestPositionsAppender::adapt;
     }
 
+    /// Rebuilds a VARCHAR block over contiguous value bytes, as the ORC and Parquet readers do.
     private static Block adapt(Block block)
     {
         if (block instanceof RunLengthEncodedBlock) {
             checkArgument(block.getPositionCount() == 0 || block.isNull(0));
-            return RunLengthEncodedBlock.create(new VariableWidthBlock(1, EMPTY_SLICE, new int[] {0, 0}, Optional.of(new long[] {0})), block.getPositionCount());
+            return RunLengthEncodedBlock.create(VariableWidthViewBlock.fromOffsets(1, EMPTY_SLICE, new int[] {0, 0}, Optional.of(new long[] {0})), block.getPositionCount());
         }
 
-        VariableWidthBlock variableWidthBlock = (VariableWidthBlock) block;
-        int[] offsets = new int[variableWidthBlock.getPositionCount() + 1];
-        long[] valueIsValid = new long[wordsForBits(variableWidthBlock.getPositionCount())];
+        VariableWidthViewBlock viewBlock = (VariableWidthViewBlock) block;
+        int positionCount = viewBlock.getPositionCount();
+        int[] offsets = new int[positionCount + 1];
+        long[] valueIsValid = new long[wordsForBits(positionCount)];
         boolean hasNullValue = false;
-        for (int i = 0; i < variableWidthBlock.getPositionCount(); i++) {
-            if (variableWidthBlock.isNull(i)) {
+        DynamicSliceOutput values = new DynamicSliceOutput(positionCount * 8);
+        for (int i = 0; i < positionCount; i++) {
+            if (viewBlock.isNull(i)) {
                 hasNullValue = true;
-                offsets[i + 1] = offsets[i];
             }
             else {
                 set(valueIsValid, 0, i);
-                offsets[i + 1] = offsets[i] + variableWidthBlock.getSliceLength(i);
+                values.writeBytes(viewBlock.getSlice(i));
             }
+            offsets[i + 1] = values.size();
         }
 
-        return new VariableWidthBlock(variableWidthBlock.getPositionCount(), variableWidthBlock.getRawSlice(), offsets, hasNullValue ? Optional.of(valueIsValid) : Optional.empty());
+        return VariableWidthViewBlock.fromOffsets(positionCount, values.slice(), offsets, hasNullValue ? Optional.of(valueIsValid) : Optional.empty());
     }
 }

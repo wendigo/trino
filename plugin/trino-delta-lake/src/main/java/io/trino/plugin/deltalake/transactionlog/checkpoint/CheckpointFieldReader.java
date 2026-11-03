@@ -22,7 +22,7 @@ import io.trino.spi.block.LongArrayBlock;
 import io.trino.spi.block.MapBlock;
 import io.trino.spi.block.RowBlock;
 import io.trino.spi.block.SqlRow;
-import io.trino.spi.block.VariableWidthBlock;
+import io.trino.spi.block.VariableWidthViewBlock;
 import io.trino.spi.type.ArrayType;
 import io.trino.spi.type.MapType;
 import io.trino.spi.type.RowType;
@@ -112,7 +112,7 @@ public class CheckpointFieldReader
     public String getString(String fieldName)
     {
         int field = requireField(fieldName);
-        VariableWidthBlock valueBlock = (VariableWidthBlock) row.getUnderlyingFieldBlock(field);
+        VariableWidthViewBlock valueBlock = (VariableWidthViewBlock) row.getUnderlyingFieldBlock(field);
         int index = row.getUnderlyingFieldPosition(field);
         if (valueBlock.isNull(index)) {
             return null;

@@ -22,6 +22,7 @@ import java.util.Optional;
 
 import static io.trino.spi.block.EncoderUtil.decodeValidityAsLongs;
 import static io.trino.spi.block.EncoderUtil.encodeValidityAsLongs;
+import static io.trino.spi.block.EncoderUtil.encodedValiditySize;
 
 public class RowBlockEncoding
         implements BlockEncoding
@@ -54,6 +55,17 @@ public class RowBlockEncoding
         }
 
         encodeValidityAsLongs(sliceOutput, rowBlock.getRawValueIsValid(), rowBlock.getOffsetBase(), rowBlock.getPositionCount());
+    }
+
+    @Override
+    public long estimatedWriteSize(BlockEncodingSerde blockEncodingSerde, Block block)
+    {
+        RowBlock rowBlock = (RowBlock) block;
+        long size = Integer.BYTES * 2L + encodedValiditySize(rowBlock.getRawValueIsValid(), rowBlock.getPositionCount());
+        for (Block fieldBlock : rowBlock.getFieldBlocks()) {
+            size += blockEncodingSerde.estimatedWriteSize(fieldBlock);
+        }
+        return size;
     }
 
     @Override

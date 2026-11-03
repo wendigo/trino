@@ -37,7 +37,7 @@ import io.trino.spi.block.IntArrayBlock;
 import io.trino.spi.block.IntArrayBlockBuilder;
 import io.trino.spi.block.LongArrayBlock;
 import io.trino.spi.block.RunLengthEncodedBlock;
-import io.trino.spi.block.VariableWidthBlockBuilder;
+import io.trino.spi.block.VariableWidthViewBlockBuilder;
 import io.trino.spi.connector.ConnectorSession;
 import io.trino.spi.connector.DynamicFilter;
 import io.trino.spi.connector.SourcePage;
@@ -866,7 +866,7 @@ public class TestColumnarFilters
             boolean containsNulls = nullsProvider != NullsProvider.NO_NULLS && nullsProvider != NullsProvider.NO_NULLS_WITH_MAY_HAVE_NULL;
             int nonNullDictionarySize = 20;
             int dictionarySize = nonNullDictionarySize + (containsNulls ? 1 : 0); // last element in dictionary denotes null
-            VariableWidthBlockBuilder builder = new VariableWidthBlockBuilder(null, dictionarySize, dictionarySize * 10);
+            VariableWidthViewBlockBuilder builder = new VariableWidthViewBlockBuilder(null, dictionarySize, dictionarySize * 10);
             for (int i = 0; i < nonNullDictionarySize; i++) {
                 builder.writeEntry(Slices.utf8Slice(Long.toString(CONSTANT - 10 + i)));
             }
@@ -878,7 +878,7 @@ public class TestColumnarFilters
 
         Optional<long[]> validity = nullsProvider.getValidityWords(positionsCount);
         assertThat(validity.isEmpty() || validity.get().length == wordsForBits(positionsCount)).isTrue();
-        VariableWidthBlockBuilder builder = new VariableWidthBlockBuilder(null, positionsCount, positionsCount * 10);
+        VariableWidthViewBlockBuilder builder = new VariableWidthViewBlockBuilder(null, positionsCount, positionsCount * 10);
         for (int i = 0; i < positionsCount; i++) {
             if (validity.isPresent() && !isSet(validity.get(), 0, i)) {
                 builder.appendNull();

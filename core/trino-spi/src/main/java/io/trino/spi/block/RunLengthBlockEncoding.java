@@ -46,6 +46,12 @@ public class RunLengthBlockEncoding
     }
 
     @Override
+    public long estimatedWriteSize(BlockEncodingSerde blockEncodingSerde, Block block)
+    {
+        return Integer.BYTES + blockEncodingSerde.estimatedWriteSize(((RunLengthEncodedBlock) block).getValue());
+    }
+
+    @Override
     public Block readBlock(BlockEncodingSerde blockEncodingSerde, SliceInput sliceInput)
     {
         // read the run length

@@ -32,7 +32,7 @@ import io.trino.spi.block.Int128ArrayBlock;
 import io.trino.spi.block.IntArrayBlock;
 import io.trino.spi.block.LongArrayBlock;
 import io.trino.spi.block.ShortArrayBlock;
-import io.trino.spi.block.VariableWidthBlock;
+import io.trino.spi.block.VariableWidthViewBlock;
 import io.trino.spi.type.BooleanType;
 import io.trino.spi.type.DecimalType;
 import io.trino.spi.type.DoubleType;
@@ -96,7 +96,6 @@ import static io.trino.spi.type.Timestamps.PICOSECONDS_PER_NANOSECOND;
 import static io.trino.spi.type.Timestamps.round;
 import static io.trino.spi.type.TinyintType.TINYINT;
 import static io.trino.spi.type.UuidType.UUID;
-import static io.trino.spi.type.VarbinaryType.VARBINARY;
 import static io.trino.spi.type.VarcharType.VARCHAR;
 import static io.trino.testing.DataProviders.cartesianProduct;
 import static io.trino.testing.DataProviders.toDataProvider;
@@ -141,7 +140,7 @@ public class TestingColumnReader
             .put(TINYINT, ByteArrayBlock.class)
             .put(REAL, IntArrayBlock.class)
             .put(DoubleType.DOUBLE, LongArrayBlock.class)
-            .put(VARCHAR, VariableWidthBlock.class)
+            .put(VARCHAR, VariableWidthViewBlock.class)
             .put(JSON, JsonBlock.class)
             .put(createDecimalType(8, 0), LongArrayBlock.class)
             .put(createDecimalType(38, 2), Int128ArrayBlock.class)
@@ -516,7 +515,7 @@ public class TestingColumnReader
     }
 
     private static final Assertion<String> ASSERT_BINARY = (values, block, offset, blockOffset) -> {
-        assertThat(VARBINARY.getSlice(block, blockOffset).getBytes()).isEqualTo(values[offset].getBytes(UTF_8));
+        assertThat(VARCHAR.getSlice(block, blockOffset).getBytes()).isEqualTo(values[offset].getBytes(UTF_8));
     };
 
     private static final Assertion<String> ASSERT_JSON = (values, block, offset, blockOffset) -> {

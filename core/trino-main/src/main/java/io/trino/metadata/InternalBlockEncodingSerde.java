@@ -96,19 +96,10 @@ public final class InternalBlockEncodingSerde
     @Override
     public long estimatedWriteSize(Block block)
     {
-        while (true) {
-            BlockEncoding blockEncoding = blockToEncoding.apply(block.getClass());
-            // see if a replacement block should be written instead
-            Optional<Block> replacementBlock = blockEncoding.replacementBlockForWrite(block);
-            if (replacementBlock.isPresent()) {
-                block = replacementBlock.get();
-                continue;
-            }
-
-            // length of encoding name + encoding name + block size
-            // TODO: improve this estimate by adding estimatedWriteSize to BlockEncoding interface
-            return SIZE_OF_INT + blockEncoding.getName().length() + block.getSizeInBytes();
-        }
+        // replacement blocks are not created, since that can copy the block; the encoding estimates what it writes
+        BlockEncoding blockEncoding = blockToEncoding.apply(block.getClass());
+        // length of encoding name + encoding name + block
+        return SIZE_OF_INT + blockEncoding.getName().length() + blockEncoding.estimatedWriteSize(this, block);
     }
 
     @Override

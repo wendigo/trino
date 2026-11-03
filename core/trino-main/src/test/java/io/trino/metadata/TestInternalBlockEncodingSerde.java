@@ -26,6 +26,8 @@ import io.trino.spi.block.BlockEncoding;
 import io.trino.spi.block.BlockEncodingSerde;
 import io.trino.spi.block.VariableWidthBlock;
 import io.trino.spi.block.VariableWidthBlockEncoding;
+import io.trino.spi.block.VariableWidthViewBlock;
+import io.trino.spi.block.VariableWidthViewBlockEncoding;
 import io.trino.spi.type.Type;
 import org.junit.jupiter.api.Test;
 
@@ -39,8 +41,12 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 public class TestInternalBlockEncodingSerde
 {
-    private final Map<String, BlockEncoding> blockEncodings = ImmutableMap.of(VariableWidthBlockEncoding.NAME, new VariableWidthBlockEncoding());
-    private final Map<Class<? extends Block>, BlockEncoding> blockNames = ImmutableMap.of(VariableWidthBlock.class, new VariableWidthBlockEncoding());
+    private final Map<String, BlockEncoding> blockEncodings = ImmutableMap.of(
+            VariableWidthBlockEncoding.NAME, new VariableWidthBlockEncoding(),
+            VariableWidthViewBlockEncoding.NAME, new VariableWidthViewBlockEncoding());
+    private final Map<Class<? extends Block>, BlockEncoding> blockNames = ImmutableMap.of(
+            VariableWidthBlock.class, new VariableWidthBlockEncoding(),
+            VariableWidthViewBlock.class, new VariableWidthViewBlockEncoding());
     private final BlockEncodingSerde blockEncodingSerde = new InternalBlockEncodingSerde(blockEncodings::get, blockNames::get, TESTING_TYPE_MANAGER::getType);
 
     @Test

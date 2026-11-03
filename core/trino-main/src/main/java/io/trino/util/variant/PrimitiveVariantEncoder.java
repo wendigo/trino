@@ -15,7 +15,9 @@ package io.trino.util.variant;
 
 import io.airlift.slice.Slice;
 import io.trino.spi.block.Block;
+import io.trino.spi.block.ValueBlock;
 import io.trino.spi.block.VariableWidthBlock;
+import io.trino.spi.block.VariableWidthViewBlock;
 import io.trino.spi.type.BigintType;
 import io.trino.spi.type.BooleanType;
 import io.trino.spi.type.DateType;
@@ -472,15 +474,21 @@ abstract class PrimitiveVariantEncoder
 
     private static Slice getSlice(Block block, int position)
     {
-        VariableWidthBlock valueBlock = (VariableWidthBlock) block.getUnderlyingValueBlock();
         int valuePosition = block.getUnderlyingValuePosition(position);
-        return valueBlock.getSlice(valuePosition);
+        return switch (block.getUnderlyingValueBlock()) {
+            case VariableWidthViewBlock valueBlock -> valueBlock.getSlice(valuePosition);
+            case VariableWidthBlock valueBlock -> valueBlock.getSlice(valuePosition);
+            case ValueBlock valueBlock -> throw new IllegalArgumentException("Unexpected block: " + valueBlock.getClass().getSimpleName());
+        };
     }
 
     private static int getSliceLength(Block block, int position)
     {
-        VariableWidthBlock valueBlock = (VariableWidthBlock) block.getUnderlyingValueBlock();
         int valuePosition = block.getUnderlyingValuePosition(position);
-        return valueBlock.getSliceLength(valuePosition);
+        return switch (block.getUnderlyingValueBlock()) {
+            case VariableWidthViewBlock valueBlock -> valueBlock.getSliceLength(valuePosition);
+            case VariableWidthBlock valueBlock -> valueBlock.getSliceLength(valuePosition);
+            case ValueBlock valueBlock -> throw new IllegalArgumentException("Unexpected block: " + valueBlock.getClass().getSimpleName());
+        };
     }
 }

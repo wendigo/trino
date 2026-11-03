@@ -58,6 +58,21 @@ public class DictionaryBlockEncoding
     }
 
     @Override
+    public long estimatedWriteSize(BlockEncodingSerde blockEncodingSerde, Block block)
+    {
+        DictionaryBlock dictionaryBlock = (DictionaryBlock) block;
+        Block dictionary = dictionaryBlock.getDictionary();
+        long dictionarySize = blockEncodingSerde.estimatedWriteSize(dictionary);
+        // a dictionary that is not compact is compacted before it is written, so only its referenced part is counted
+        if (!dictionaryBlock.isCompact() && dictionary.getPositionCount() > 0) {
+            dictionarySize = dictionarySize * dictionaryBlock.getUniqueIds() / dictionary.getPositionCount();
+        }
+        return Integer.BYTES
+                + dictionarySize
+                + Integer.BYTES * (long) dictionaryBlock.getPositionCount();
+    }
+
+    @Override
     public Block readBlock(BlockEncodingSerde blockEncodingSerde, SliceInput sliceInput)
     {
         // positionCount

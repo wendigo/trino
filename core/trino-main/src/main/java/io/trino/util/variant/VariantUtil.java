@@ -27,7 +27,6 @@ import io.trino.spi.block.ArrayBlockBuilder;
 import io.trino.spi.block.BlockBuilder;
 import io.trino.spi.block.MapBlockBuilder;
 import io.trino.spi.block.RowBlockBuilder;
-import io.trino.spi.block.VariableWidthBlockBuilder;
 import io.trino.spi.type.ArrayType;
 import io.trino.spi.type.BigintType;
 import io.trino.spi.type.BooleanType;
@@ -114,6 +113,7 @@ import static io.trino.spi.type.TinyintType.TINYINT;
 import static io.trino.spi.type.UuidType.UUID;
 import static io.trino.spi.type.VarbinaryType.VARBINARY;
 import static io.trino.spi.type.VarcharType.UNBOUNDED_LENGTH;
+import static io.trino.spi.type.VarcharType.VARCHAR;
 import static io.trino.spi.type.VariantType.VARIANT;
 import static io.trino.spi.variant.Header.BasicType.PRIMITIVE;
 import static io.trino.spi.variant.Header.PrimitiveType.BINARY;
@@ -1170,7 +1170,7 @@ public final class VariantUtil
             Metadata metadata = variant.metadata();
             mapBlockBuilder.buildEntry((keyBuilder, valueBuilder) ->
                     variant.objectFields().forEach(fieldIdValue -> {
-                        ((VariableWidthBlockBuilder) keyBuilder).writeEntry(metadata.get(fieldIdValue.fieldId()));
+                        VARCHAR.writeSlice(keyBuilder, metadata.get(fieldIdValue.fieldId()));
                         valueAppender.append(fieldIdValue.value(), valueBuilder);
                     }));
         }

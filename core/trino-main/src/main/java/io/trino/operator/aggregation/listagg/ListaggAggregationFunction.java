@@ -16,7 +16,7 @@ package io.trino.operator.aggregation.listagg;
 import io.airlift.slice.Slice;
 import io.trino.spi.block.BlockBuilder;
 import io.trino.spi.block.ValueBlock;
-import io.trino.spi.block.VariableWidthBlockBuilder;
+import io.trino.spi.block.VariableWidthViewBlockBuilder;
 import io.trino.spi.function.AggregationFunction;
 import io.trino.spi.function.AggregationState;
 import io.trino.spi.function.BlockIndex;
@@ -58,6 +58,6 @@ public final class ListaggAggregationFunction
     @OutputFunction("VARCHAR")
     public static void output(ListaggAggregationState state, BlockBuilder blockBuilder)
     {
-        state.write((VariableWidthBlockBuilder) blockBuilder);
+        state.write((VariableWidthViewBlockBuilder) blockBuilder);
     }
 }

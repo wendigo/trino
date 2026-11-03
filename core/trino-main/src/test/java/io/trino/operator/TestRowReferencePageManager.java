@@ -17,12 +17,15 @@ import io.trino.spi.Page;
 import io.trino.spi.block.Block;
 import io.trino.spi.block.BlockBuilder;
 import io.trino.spi.block.DictionaryBlock;
+import io.trino.spi.type.Type;
 import org.junit.jupiter.api.Test;
 
 import java.util.ArrayList;
 import java.util.List;
 
+import static io.airlift.slice.Slices.utf8Slice;
 import static io.trino.spi.type.BigintType.BIGINT;
+import static io.trino.spi.type.VarbinaryType.VARBINARY;
 import static io.trino.spi.type.VarcharType.VARCHAR;
 import static java.lang.Math.toIntExact;
 import static org.assertj.core.api.Assertions.assertThat;
@@ -311,9 +314,9 @@ public class TestRowReferencePageManager
     {
         RowReferencePageManager pageManager = new RowReferencePageManager();
 
-        BlockBuilder blockBuilder = VARCHAR.createBlockBuilder(null, 2, 1_000_000);
-        VARCHAR.writeString(blockBuilder, "a");
-        VARCHAR.writeString(blockBuilder, "b");
+        BlockBuilder blockBuilder = VARBINARY.createBlockBuilder(null, 2, 1_000_000);
+        VARBINARY.writeSlice(blockBuilder, utf8Slice("a"));
+        VARBINARY.writeSlice(blockBuilder, utf8Slice("b"));
         Page page = new Page(blockBuilder.build());
         long retainedBefore = page.getRetainedSizeInBytes();
         assertThat(retainedBefore).isGreaterThan(1_000_000);
@@ -333,12 +336,12 @@ public class TestRowReferencePageManager
         pageManager.compactIfNeeded();
         assertThat(pageManager.getCompactionCandidateCount()).isEqualTo(0);
         assertThat(pageManager.getPageBytes()).isLessThan(retainedBefore / 100);
-        assertThat(extractString(pageManager, id0)).isEqualTo("a");
-        assertThat(extractString(pageManager, id1)).isEqualTo("b");
+        assertThat(extractString(VARBINARY, pageManager, id0)).isEqualTo("a");
+        assertThat(extractString(VARBINARY, pageManager, id1)).isEqualTo("b");
 
         pageManager.dereference(id0);
         assertThat(pageManager.getCompactionCandidateCount()).isEqualTo(0);
-        assertThat(extractString(pageManager, id1)).isEqualTo("b");
+        assertThat(extractString(VARBINARY, pageManager, id1)).isEqualTo("b");
 
         pageManager.dereference(id1);
         assertThat(pageManager.getPageBytes()).isEqualTo(0);
@@ -351,8 +354,8 @@ public class TestRowReferencePageManager
 
         // Builder sized to 1.25x the value, matching the block builder reset skew
         int valueLength = 1_000_000;
-        BlockBuilder blockBuilder = VARCHAR.createBlockBuilder(null, 1, valueLength * 5 / 4);
-        VARCHAR.writeString(blockBuilder, "z".repeat(valueLength));
+        BlockBuilder blockBuilder = VARBINARY.createBlockBuilder(null, 1, valueLength * 5 / 4);
+        VARBINARY.writeSlice(blockBuilder, utf8Slice("z".repeat(valueLength)));
         Page page = new Page(blockBuilder.build());
         long retainedBefore = page.getRetainedSizeInBytes();
         assertThat(retainedBefore).isGreaterThan(valueLength * 5L / 4);
@@ -368,7 +371,7 @@ public class TestRowReferencePageManager
         pageManager.compactIfNeeded();
         assertThat(pageManager.getCompactionCandidateCount()).isEqualTo(0);
         assertThat(pageManager.getPageBytes()).isLessThan(valueLength + 4096);
-        assertThat(extractString(pageManager, id)).hasSize(valueLength);
+        assertThat(extractString(VARBINARY, pageManager, id)).hasSize(valueLength);
     }
 
     @Test
@@ -401,15 +404,15 @@ public class TestRowReferencePageManager
         pageManager.compactIfNeeded();
         assertThat(pageManager.getCompactionCandidateCount()).isEqualTo(0);
         assertThat(pageManager.getPageBytes()).isLessThan(pageBytesBeforeCompaction / 2 + 1024);
-        assertThat(extractString(pageManager, id0)).isEqualTo("x".repeat(100_000));
-        assertThat(extractString(pageManager, id1)).isEqualTo("y".repeat(100_000));
+        assertThat(extractString(VARCHAR, pageManager, id0)).isEqualTo("x".repeat(100_000));
+        assertThat(extractString(VARCHAR, pageManager, id1)).isEqualTo("y".repeat(100_000));
     }
 
-    private static String extractString(RowReferencePageManager pageManager, long rowId)
+    private static String extractString(Type type, RowReferencePageManager pageManager, long rowId)
     {
         Page page = pageManager.getPage(rowId);
         int position = pageManager.getPosition(rowId);
-        return VARCHAR.getSlice(page.getBlock(0), position).toStringUtf8();
+        return type.getSlice(page.getBlock(0), position).toStringUtf8();
     }
 
     private static long extractValue(RowReferencePageManager pageManager, long rowId)

@@ -72,9 +72,9 @@ final class SliceData
     public ValueBlock toBlock(Type desiredType)
     {
         int numberOfRecords = numberOfRecords();
-        if (desiredType.getJavaType() != Slice.class) {
-            // The type has its own block representation (e.g. JSON); write each UTF-8 value through
-            // the type rather than assuming a plain variable-width block.
+        if (desiredType.getValueBlockType() != VariableWidthBlock.class) {
+            // The type has its own block representation (e.g. VARCHAR or JSON); write each UTF-8 value
+            // through the type rather than assuming a plain variable-width block.
             BlockBuilder builder = desiredType.createBlockBuilder(null, numberOfRecords);
             int offset = 0;
             for (int record = 0; record < numberOfRecords; record++) {

@@ -63,8 +63,9 @@ public class SliceColumnReader
 
         int maxCodePointCount = getMaxCodePointCount(type);
         boolean charType = type instanceof CharType;
-        directReader = new SliceDirectColumnReader(column, maxCodePointCount, charType);
-        dictionaryReader = new SliceDictionaryColumnReader(column, memoryContext.newLocalMemoryContext(SliceColumnReader.class.getSimpleName()), maxCodePointCount, charType);
+        boolean varcharType = type instanceof VarcharType;
+        directReader = new SliceDirectColumnReader(column, maxCodePointCount, charType, varcharType);
+        dictionaryReader = new SliceDictionaryColumnReader(column, memoryContext.newLocalMemoryContext(SliceColumnReader.class.getSimpleName()), maxCodePointCount, charType, varcharType);
     }
 
     @Override

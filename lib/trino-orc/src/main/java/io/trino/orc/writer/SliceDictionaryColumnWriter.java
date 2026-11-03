@@ -38,7 +38,9 @@ import io.trino.orc.stream.PresentOutputStream;
 import io.trino.orc.stream.StreamDataOutput;
 import io.trino.spi.block.Block;
 import io.trino.spi.block.DictionaryBlock;
+import io.trino.spi.block.ValueBlock;
 import io.trino.spi.block.VariableWidthBlock;
+import io.trino.spi.block.VariableWidthViewBlock;
 import io.trino.spi.type.Type;
 import it.unimi.dsi.fastutil.ints.IntArrays;
 
@@ -171,6 +173,9 @@ public class SliceDictionaryColumnWriter
         checkState(directColumnWriter.getBufferedBytes() == 0);
 
         Block dictionaryValues = dictionary.getElementBlock();
+        if (type.getValueBlockType() == VariableWidthViewBlock.class) {
+            dictionaryValues = VariableWidthViewBlock.fromVariableWidthBlock((VariableWidthBlock) dictionaryValues);
+        }
         for (DictionaryRowGroup rowGroup : rowGroups) {
             directColumnWriter.beginRowGroup();
             // todo we should be able to pass the stats down to avoid recalculating min and max
@@ -295,10 +300,14 @@ public class SliceDictionaryColumnWriter
 
         // record values
         values.ensureCapacity(rowGroupValueCount + block.getPositionCount());
-        VariableWidthBlock valueBlock = (VariableWidthBlock) block.getUnderlyingValueBlock();
+        ValueBlock valueBlock = block.getUnderlyingValueBlock();
         for (int i = 0; i < block.getPositionCount(); i++) {
             int position = block.getUnderlyingValuePosition(i);
-            int index = dictionary.putIfAbsent(valueBlock, position);
+            int index = switch (valueBlock) {
+                case VariableWidthViewBlock viewBlock -> dictionary.putIfAbsent(viewBlock, position);
+                case VariableWidthBlock variableWidthBlock -> dictionary.putIfAbsent(variableWidthBlock, position);
+                default -> throw new IllegalArgumentException("Unsupported block: " + valueBlock.getClass().getSimpleName());
+            };
             values.set(rowGroupValueCount, index);
             rowGroupValueCount++;
             totalValueCount++;
@@ -307,7 +316,7 @@ public class SliceDictionaryColumnWriter
                 // todo min/max statistics only need to be updated if value was not already in the dictionary, but non-null count does
                 statisticsBuilder.addValue(type.getSlice(valueBlock, position));
 
-                rawBytes += valueBlock.getSliceLength(position);
+                rawBytes += valueBlock.getEstimatedDataSizeForStats(position);
                 totalNonNullValueCount++;
             }
         }

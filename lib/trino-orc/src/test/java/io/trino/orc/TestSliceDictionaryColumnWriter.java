@@ -31,7 +31,7 @@ import io.trino.orc.metadata.statistics.Utf8BloomFilterBuilder;
 import io.trino.orc.writer.SliceDictionaryColumnWriter;
 import io.trino.spi.block.Block;
 import io.trino.spi.block.RunLengthEncodedBlock;
-import io.trino.spi.block.VariableWidthBlockBuilder;
+import io.trino.spi.block.VariableWidthViewBlockBuilder;
 import org.junit.jupiter.api.Test;
 
 import java.io.IOException;
@@ -91,7 +91,7 @@ public class TestSliceDictionaryColumnWriter
         writer.finishRowGroup();
 
         writer.beginRowGroup();
-        VariableWidthBlockBuilder blockBuilder = new VariableWidthBlockBuilder(null, 2, 16);
+        VariableWidthViewBlockBuilder blockBuilder = new VariableWidthViewBlockBuilder(null, 2, 16);
         blockBuilder.writeEntry(utf8Slice("a"));
         blockBuilder.writeEntry(utf8Slice("b"));
         writer.writeBlock(blockBuilder.build());
@@ -114,7 +114,7 @@ public class TestSliceDictionaryColumnWriter
 
         List<Slice> testValues = new ArrayList<>(valuesCount);
         int expectedEntries = (valuesCount / 9) + 1;
-        VariableWidthBlockBuilder blockBuilder = new VariableWidthBlockBuilder(
+        VariableWidthViewBlockBuilder blockBuilder = new VariableWidthViewBlockBuilder(
                 null,
                 expectedEntries,
                 expectedEntries * 500);
@@ -186,7 +186,7 @@ public class TestSliceDictionaryColumnWriter
 
     private static void writeDistinctValues(SliceDictionaryColumnWriter writer, int firstValue, int count, int expectedIndexBytesPerValue)
     {
-        VariableWidthBlockBuilder blockBuilder = new VariableWidthBlockBuilder(null, count, count * 16);
+        VariableWidthViewBlockBuilder blockBuilder = new VariableWidthViewBlockBuilder(null, count, count * 16);
         for (int i = firstValue; i < firstValue + count; i++) {
             blockBuilder.writeEntry(utf8Slice("value_" + i));
         }

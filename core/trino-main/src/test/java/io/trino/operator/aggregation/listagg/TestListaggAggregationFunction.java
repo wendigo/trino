@@ -17,7 +17,7 @@ import io.airlift.slice.Slice;
 import io.trino.metadata.TestingFunctionResolution;
 import io.trino.spi.TrinoException;
 import io.trino.spi.block.ValueBlock;
-import io.trino.spi.block.VariableWidthBlockBuilder;
+import io.trino.spi.block.VariableWidthViewBlockBuilder;
 import io.trino.sql.analyzer.TypeDescriptorProvider;
 import org.junit.jupiter.api.Test;
 
@@ -58,7 +58,7 @@ public class TestListaggAggregationFunction
                 overflowFiller,
                 true);
 
-        VariableWidthBlockBuilder blockBuilder = VARCHAR.createBlockBuilder(null, 1);
+        VariableWidthViewBlockBuilder blockBuilder = VARCHAR.createBlockBuilder(null, 1);
         state.write(blockBuilder);
         String result = VARCHAR.getSlice(blockBuilder.build(), 0).toString(StandardCharsets.UTF_8);
         assertThat(result).isEqualTo(s);
@@ -230,7 +230,7 @@ public class TestListaggAggregationFunction
 
     private static String getOutputStateOnlyValue(SingleListaggAggregationState state, int maxOutputLengthInBytes)
     {
-        VariableWidthBlockBuilder blockBuilder = VARCHAR.createBlockBuilder(null, 1, maxOutputLengthInBytes + 20);
+        VariableWidthViewBlockBuilder blockBuilder = VARCHAR.createBlockBuilder(null, 1, maxOutputLengthInBytes + 20);
         state.setMaxOutputLength(maxOutputLengthInBytes);
         state.write(blockBuilder);
         return VARCHAR.getSlice(blockBuilder.build(), 0).toStringUtf8();

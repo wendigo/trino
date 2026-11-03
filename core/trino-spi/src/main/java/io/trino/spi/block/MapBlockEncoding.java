@@ -22,6 +22,7 @@ import java.util.Optional;
 
 import static io.trino.spi.block.EncoderUtil.decodeValidityAsLongs;
 import static io.trino.spi.block.EncoderUtil.encodeValidityAsLongs;
+import static io.trino.spi.block.EncoderUtil.encodedValiditySize;
 import static io.trino.spi.block.MapBlock.createMapBlockInternal;
 import static io.trino.spi.block.MapHashTables.HASH_MULTIPLIER;
 import static io.trino.spi.block.MapHashTables.HashBuildMode.DUPLICATE_NOT_CHECKED;
@@ -79,6 +80,24 @@ public class MapBlockEncoding
         }
 
         encodeValidityAsLongs(sliceOutput, mapBlock.getRawValueIsValid(), offsetBase, positionCount);
+    }
+
+    @Override
+    public long estimatedWriteSize(BlockEncodingSerde blockEncodingSerde, Block block)
+    {
+        MapBlock mapBlock = (MapBlock) block;
+        int positionCount = mapBlock.getPositionCount();
+        int offsetBase = mapBlock.getOffsetBase();
+        int[] offsets = mapBlock.getRawOffsets();
+        int entriesStartOffset = offsets[offsetBase];
+        int entryCount = offsets[offsetBase + positionCount] - entriesStartOffset;
+        long hashTableSize = mapBlock.getHashTables().tryGet().isPresent() ? Integer.BYTES * (long) entryCount * HASH_MULTIPLIER : 0;
+        return Integer.BYTES + mapBlock.getMapType().getTypeId().getId().length()
+                + blockEncodingSerde.estimatedWriteSize(mapBlock.getRawKeyBlock().getRegion(entriesStartOffset, entryCount))
+                + blockEncodingSerde.estimatedWriteSize(mapBlock.getRawValueBlock().getRegion(entriesStartOffset, entryCount))
+                + Integer.BYTES + hashTableSize
+                + Integer.BYTES * (positionCount + 2L)
+                + encodedValiditySize(mapBlock.getRawValueIsValid(), positionCount);
     }
 
     @Override

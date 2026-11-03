@@ -16,7 +16,7 @@ package io.trino.operator.aggregation.listagg;
 import io.airlift.slice.DynamicSliceOutput;
 import io.airlift.slice.SliceOutput;
 import io.trino.spi.block.ValueBlock;
-import io.trino.spi.block.VariableWidthBlockBuilder;
+import io.trino.spi.block.VariableWidthViewBlockBuilder;
 import io.trino.spi.function.AccumulatorState;
 import io.trino.spi.function.GroupedAccumulatorState;
 
@@ -125,7 +125,7 @@ public class GroupListaggAggregationState
     }
 
     @Override
-    public void write(VariableWidthBlockBuilder blockBuilder)
+    public void write(VariableWidthViewBlockBuilder blockBuilder)
     {
         if (groupSize[groupId] == 0) {
             blockBuilder.appendNull();

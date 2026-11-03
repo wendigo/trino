@@ -88,7 +88,6 @@ import static io.trino.spi.type.Timestamps.PICOSECONDS_PER_NANOSECOND;
 import static io.trino.spi.type.Timestamps.roundDiv;
 import static io.trino.spi.type.TinyintType.TINYINT;
 import static io.trino.spi.type.UuidType.UUID;
-import static io.trino.spi.type.VarcharType.VARCHAR;
 import static java.lang.Float.floatToRawIntBits;
 import static java.lang.Float.intBitsToFloat;
 import static java.lang.Math.floorDiv;
@@ -398,7 +397,7 @@ class FakerPageSource
             if (!genericRange.isAll()) {
                 throw new TrinoException(INVALID_ROW_FILTER, "Predicates for columns with a generator expression are not supported");
             }
-            return blockBuilder -> VARCHAR.writeSlice(blockBuilder, Slices.utf8Slice(faker.expression(handle.generator())));
+            return blockBuilder -> type.writeSlice(blockBuilder, Slices.utf8Slice(faker.expression(handle.generator())));
         }
         // check every type in order defined in StandardTypes
         if (BIGINT.equals(type)) {

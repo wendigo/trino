@@ -24,7 +24,6 @@ import io.trino.spi.type.Type;
 import java.util.List;
 
 import static com.google.common.collect.Comparators.max;
-import static io.trino.spi.type.VarbinaryType.VARBINARY;
 import static io.trino.spi.type.VarcharType.VARCHAR;
 
 public class TestVarBinaryMaxAggregation
@@ -33,9 +32,9 @@ public class TestVarBinaryMaxAggregation
     @Override
     protected Block[] getSequenceBlocks(int start, int length)
     {
-        BlockBuilder blockBuilder = VARBINARY.createBlockBuilder(null, length);
+        BlockBuilder blockBuilder = VARCHAR.createBlockBuilder(null, length);
         for (int i = start; i < start + length; i++) {
-            VARBINARY.writeSlice(blockBuilder, Slices.wrappedBuffer(Ints.toByteArray(i)));
+            VARCHAR.writeSlice(blockBuilder, Slices.wrappedBuffer(Ints.toByteArray(i)));
         }
         return new Block[] {blockBuilder.build()};
     }

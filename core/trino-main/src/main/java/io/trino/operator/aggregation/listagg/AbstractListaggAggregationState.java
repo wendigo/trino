@@ -24,7 +24,7 @@ import io.trino.spi.block.Block;
 import io.trino.spi.block.RowBlockBuilder;
 import io.trino.spi.block.SqlRow;
 import io.trino.spi.block.ValueBlock;
-import io.trino.spi.block.VariableWidthBlockBuilder;
+import io.trino.spi.block.VariableWidthViewBlockBuilder;
 import io.trino.spi.type.ArrayType;
 
 import java.util.ArrayList;
@@ -192,7 +192,7 @@ public abstract class AbstractListaggAggregationState
             BOOLEAN.writeBoolean(fieldBuilders.get(3), showOverflowEntryCount);
 
             ((ArrayBlockBuilder) fieldBuilders.get(4)).buildEntry(elementBuilder -> {
-                VariableWidthBlockBuilder valueBuilder = (VariableWidthBlockBuilder) elementBuilder;
+                VariableWidthViewBlockBuilder valueBuilder = (VariableWidthViewBlockBuilder) elementBuilder;
                 for (byte[] records : closedRecordGroups) {
                     int recordOffset = 0;
                     for (int recordIndex = 0; recordIndex < RECORDS_PER_GROUP; recordIndex++) {
@@ -210,7 +210,7 @@ public abstract class AbstractListaggAggregationState
         });
     }
 
-    private void writeValue(byte[] records, int recordOffset, VariableWidthBlockBuilder elementBuilder)
+    private void writeValue(byte[] records, int recordOffset, VariableWidthViewBlockBuilder elementBuilder)
     {
         byte[] variableWidthChunk = variableWidthData.getChunk(records, recordOffset);
         int valueOffset = getChunkOffset(records, recordOffset);

@@ -27,7 +27,7 @@ import io.trino.orc.stream.LongInputStream;
 import io.trino.spi.block.Block;
 import io.trino.spi.block.DictionaryBlock;
 import io.trino.spi.block.RunLengthEncodedBlock;
-import io.trino.spi.block.VariableWidthBlock;
+import io.trino.spi.block.ValueBlock;
 import jakarta.annotation.Nullable;
 
 import java.io.IOException;
@@ -47,6 +47,7 @@ import static io.trino.orc.metadata.Stream.StreamKind.LENGTH;
 import static io.trino.orc.metadata.Stream.StreamKind.PRESENT;
 import static io.trino.orc.reader.ReaderUtils.minNonNullValueSize;
 import static io.trino.orc.reader.SliceColumnReader.computeTruncatedLength;
+import static io.trino.orc.reader.SliceDirectColumnReader.createSliceBlock;
 import static io.trino.orc.stream.MissingInputStreamSource.missingStreamSource;
 import static io.trino.spi.block.Bitmap.allocateWords;
 import static io.trino.spi.block.Bitmap.clear;
@@ -68,6 +69,7 @@ public class SliceDictionaryColumnReader
     private final OrcColumn column;
     private final int maxCodePointCount;
     private final boolean isCharType;
+    private final boolean isVarcharType;
 
     private int readOffset;
     private int nextBatchSize;
@@ -83,7 +85,7 @@ public class SliceDictionaryColumnReader
     private byte[] dictionaryData = EMPTY_DICTIONARY_DATA;
     private int[] dictionaryOffsetVector = EMPTY_DICTIONARY_OFFSETS;
 
-    private VariableWidthBlock dictionaryBlock = new VariableWidthBlock(1, wrappedBuffer(EMPTY_DICTIONARY_DATA), EMPTY_DICTIONARY_OFFSETS, Optional.of(new long[] {0}));
+    private ValueBlock dictionaryBlock;
     private byte[] currentDictionaryData = EMPTY_DICTIONARY_DATA;
 
     private InputStreamSource<LongInputStream> dictionaryLengthStreamSource = missingStreamSource(LongInputStream.class);
@@ -99,10 +101,12 @@ public class SliceDictionaryColumnReader
 
     private final LocalMemoryContext memoryContext;
 
-    public SliceDictionaryColumnReader(OrcColumn column, LocalMemoryContext memoryContext, int maxCodePointCount, boolean isCharType)
+    public SliceDictionaryColumnReader(OrcColumn column, LocalMemoryContext memoryContext, int maxCodePointCount, boolean isCharType, boolean isVarcharType)
     {
         this.maxCodePointCount = maxCodePointCount;
         this.isCharType = isCharType;
+        this.isVarcharType = isVarcharType;
+        this.dictionaryBlock = createSliceBlock(isVarcharType, 1, wrappedBuffer(EMPTY_DICTIONARY_DATA), EMPTY_DICTIONARY_OFFSETS, Optional.of(new long[] {0}));
         this.column = requireNonNull(column, "column is null");
         this.memoryContext = requireNonNull(memoryContext, "memoryContext is null");
     }
@@ -169,7 +173,7 @@ public class SliceDictionaryColumnReader
 
     private Block readAllNullsBlock()
     {
-        return RunLengthEncodedBlock.create(new VariableWidthBlock(1, EMPTY_SLICE, new int[2], Optional.of(new long[] {0})), nextBatchSize);
+        return RunLengthEncodedBlock.create(createSliceBlock(isVarcharType, 1, EMPTY_SLICE, new int[2], Optional.of(new long[] {0})), nextBatchSize);
     }
 
     private Block readNonNullBlock()
@@ -221,7 +225,7 @@ public class SliceDictionaryColumnReader
             long[] valueIsValid = allocateWords(positionCount, true);
             clear(valueIsValid, 0, positionCount - 1);
             dictionaryOffsets[positionCount] = dictionaryOffsets[positionCount - 1];
-            dictionaryBlock = new VariableWidthBlock(positionCount, wrappedBuffer(dictionaryData), dictionaryOffsets, Optional.of(valueIsValid));
+            dictionaryBlock = createSliceBlock(isVarcharType, positionCount, wrappedBuffer(dictionaryData), dictionaryOffsets, Optional.of(valueIsValid));
             currentDictionaryData = dictionaryData;
             memoryContext.setBytes(getRetainedSizeInBytes());
         }

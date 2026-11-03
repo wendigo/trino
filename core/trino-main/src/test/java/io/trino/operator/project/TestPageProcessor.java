@@ -405,14 +405,14 @@ public class TestPageProcessor
         // process large page which will reduce batch size
         Slice[] slices = new Slice[(int) (MAX_BATCH_SIZE * 2.5)];
         Arrays.fill(slices, Slices.allocate(4096));
-        SourcePage inputPage = SourcePage.create(createSlicesBlock(slices));
+        SourcePage inputPage = SourcePage.create(createSlicesBlock(VARCHAR, Arrays.asList(slices)));
 
         Iterator<Optional<Page>> output = processAndAssertRetainedPageSize(pageProcessor, inputPage);
 
         List<Optional<Page>> outputPages = ImmutableList.copyOf(output);
         int batchSize = MAX_BATCH_SIZE;
         for (Optional<Page> actualPage : outputPages) {
-            Page expectedPage = new Page(createSlicesBlock(Arrays.copyOfRange(slices, 0, batchSize)));
+            Page expectedPage = new Page(createSlicesBlock(VARCHAR, Arrays.asList(Arrays.copyOfRange(slices, 0, batchSize))));
             assertPageEquals(ImmutableList.of(VARCHAR), actualPage.orElse(null), expectedPage);
             if (actualPage.orElseThrow(() -> new AssertionError("page is not present")).getSizeInBytes() > MAX_PAGE_SIZE_IN_BYTES) {
                 batchSize = batchSize / 2;
@@ -421,14 +421,14 @@ public class TestPageProcessor
 
         // process small page which will increase batch size
         Arrays.fill(slices, Slices.allocate(128));
-        inputPage = SourcePage.create(createSlicesBlock(slices));
+        inputPage = SourcePage.create(createSlicesBlock(VARCHAR, Arrays.asList(slices)));
 
         output = processAndAssertRetainedPageSize(pageProcessor, inputPage);
 
         outputPages = ImmutableList.copyOf(output);
         int offset = 0;
         for (Optional<Page> actualPage : outputPages) {
-            Page expectedPage = new Page(createSlicesBlock(Arrays.copyOfRange(slices, 0, Math.min(inputPage.getPositionCount() - offset, batchSize))));
+            Page expectedPage = new Page(createSlicesBlock(VARCHAR, Arrays.asList(Arrays.copyOfRange(slices, 0, Math.min(inputPage.getPositionCount() - offset, batchSize)))));
             assertPageEquals(ImmutableList.of(VARCHAR), actualPage.orElse(null), expectedPage);
             offset += actualPage.orElseThrow(() -> new AssertionError("page is not present")).getPositionCount();
             if (actualPage.orElseThrow(() -> new AssertionError("page is not present")).getSizeInBytes() < MIN_PAGE_SIZE_IN_BYTES) {
@@ -451,7 +451,7 @@ public class TestPageProcessor
         // process large page which will reduce batch size
         Slice[] slices = new Slice[(int) (MAX_BATCH_SIZE * 2.5)];
         Arrays.fill(slices, Slices.allocate(4096));
-        SourcePage inputPage = SourcePage.create(createSlicesBlock(slices));
+        SourcePage inputPage = SourcePage.create(createSlicesBlock(VARCHAR, Arrays.asList(slices)));
 
         Iterator<Optional<Page>> output = processAndAssertRetainedPageSize(pageProcessor, inputPage);
 
@@ -464,7 +464,7 @@ public class TestPageProcessor
         int pageCount = 0;
         while (output.hasNext()) {
             Page actualPage = output.next().orElse(null);
-            Block sliceBlock = createSlicesBlock(Arrays.copyOfRange(slices, 0, batchSize));
+            Block sliceBlock = createSlicesBlock(VARCHAR, Arrays.asList(Arrays.copyOfRange(slices, 0, batchSize)));
             Page expectedPage = new Page(sliceBlock, sliceBlock);
             assertPageEquals(ImmutableList.of(VARCHAR, VARCHAR), actualPage, expectedPage);
             pageCount++;
@@ -521,7 +521,7 @@ public class TestPageProcessor
 
         Slice[] slices = new Slice[rows];
         Arrays.fill(slices, Slices.allocate(rows));
-        SourcePage inputPage = SourcePage.create(createSlicesBlock(slices));
+        SourcePage inputPage = SourcePage.create(createSlicesBlock(VARCHAR, Arrays.asList(slices)));
         Iterator<Optional<Page>> output = processAndAssertRetainedPageSize(pageProcessor, inputPage);
 
         long previousPositionCount = 1;
@@ -553,7 +553,7 @@ public class TestPageProcessor
 
         Slice[] slices = new Slice[rows];
         Arrays.fill(slices, Slices.allocate(64 * 1024));
-        SourcePage inputPage = SourcePage.create(createSlicesBlock(slices));
+        SourcePage inputPage = SourcePage.create(createSlicesBlock(VARCHAR, Arrays.asList(slices)));
         Iterator<Optional<Page>> output = processAndAssertRetainedPageSize(pageProcessor, inputPage);
 
         List<Integer> batchSizes = new ArrayList<>();
@@ -582,7 +582,7 @@ public class TestPageProcessor
 
         Slice[] slices = new Slice[rows];
         Arrays.fill(slices, Slices.allocate(64 * 1024));
-        SourcePage inputPage = SourcePage.create(createSlicesBlock(slices));
+        SourcePage inputPage = SourcePage.create(createSlicesBlock(VARCHAR, Arrays.asList(slices)));
         Iterator<Optional<Page>> output = processAndAssertRetainedPageSize(pageProcessor, inputPage);
 
         Optional<Page> page = output.next();

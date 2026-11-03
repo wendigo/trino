@@ -22,6 +22,7 @@ import com.google.common.collect.ImmutableMap;
 import io.airlift.json.JsonCodec;
 import io.airlift.json.JsonCodecFactory;
 import io.airlift.json.JsonMapperProvider;
+import io.airlift.slice.Slice;
 import io.trino.block.BlockJsonSerde;
 import io.trino.jsonpath.JsonDateTimeTemplate;
 import io.trino.jsonpath.ir.IrAbsMethod;
@@ -90,7 +91,10 @@ public class TestSqlJsonPathTypeSerialization
             .get();
     public static final JsonCodec<IrJsonPath> JSON_PATH_CODEC = new JsonCodecFactory(OBJECT_MAPPER).jsonCodec(IrJsonPath.class);
     public static final Type JSON_PATH_2016 = new SqlJsonPathType(JSON_PATH_CODEC);
-    private static final RecursiveComparisonConfiguration COMPARISON_CONFIGURATION = RecursiveComparisonConfiguration.builder().withStrictTypeChecking(true).build();
+    private static final RecursiveComparisonConfiguration COMPARISON_CONFIGURATION = RecursiveComparisonConfiguration.builder()
+            .withStrictTypeChecking(true)
+            .withComparatorForType(Slice::compareTo, Slice.class)
+            .build();
 
     @Test
     public void testJsonPathMode()

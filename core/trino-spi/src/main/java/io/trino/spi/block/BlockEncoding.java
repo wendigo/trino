@@ -39,6 +39,15 @@ public interface BlockEncoding
     void writeBlock(BlockEncodingSerde blockEncodingSerde, SliceOutput sliceOutput, Block block);
 
     /**
+     * Estimate the number of bytes {@link #writeBlock} writes for the specified block, which is used to size the
+     * output before the block is written.
+     */
+    default long estimatedWriteSize(BlockEncodingSerde blockEncodingSerde, Block block)
+    {
+        return block.getSizeInBytes();
+    }
+
+    /**
      * This method allows the implementor to specify a replacement object that will be serialized instead of the original one.
      */
     default Optional<Block> replacementBlockForWrite(Block block)

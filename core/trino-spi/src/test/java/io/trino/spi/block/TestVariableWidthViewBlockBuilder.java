@@ -20,6 +20,7 @@ import org.junit.jupiter.api.Test;
 
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Collections;
 import java.util.List;
 import java.util.Optional;
 import java.util.Random;
@@ -129,7 +130,7 @@ final class TestVariableWidthViewBlockBuilder
         }
         VariableWidthViewBlock copied = region.copyPositions(positions, 1, 4);
         assertThat(blockToValues(copied)).isEqualTo(expectedPositions.subList(1, 5));
-        assertThat(copied.getRawBuffers()).hasSizeLessThanOrEqualTo(1);
+        assertThat(copied.getRawBuffers().length).isLessThanOrEqualTo(1);
 
         VariableWidthViewBlock withNull = region.copyWithAppendedNull();
         List<String> expectedWithNull = new ArrayList<>(expected.subList(9, 49));
@@ -150,9 +151,9 @@ final class TestVariableWidthViewBlockBuilder
             blockBuilder.writeEntry(value);
         }
         VariableWidthViewBlock block = blockBuilder.buildValueBlock();
-        Slice[] buffers = block.getRawBuffers();
+        byte[][] buffers = block.getRawBuffers();
         assertThat(buffers.length).isGreaterThan(1);
-        long bufferBytes = Arrays.stream(buffers).mapToLong(buffer -> buffer.byteArray().length).sum();
+        long bufferBytes = Arrays.stream(buffers).mapToLong(buffer -> buffer.length).sum();
         // each buffer is at most one value short of full, and buffers stop growing at MAX_BUFFER_SIZE
         assertThat(bufferBytes).isLessThan(4000L * value.length() + MAX_BUFFER_SIZE);
         for (int position = 0; position < block.getPositionCount(); position++) {
@@ -191,6 +192,140 @@ final class TestVariableWidthViewBlockBuilder
         VariableWidthBlock variableWidthBlock = variableWidthBlockBuilder.buildValueBlock();
         assertThat(viewBlock.getSizeInBytes()).isEqualTo(variableWidthBlock.getSizeInBytes());
         assertThat(viewBlock.getRegionSizeInBytes(17, 100)).isEqualTo(variableWidthBlock.getRegionSizeInBytes(17, 100));
+    }
+
+    @Test
+    public void testEveryLengthAroundInlineLimit()
+    {
+        for (int length = 0; length <= INLINE_SIZE + 1; length++) {
+            byte[] value = new byte[length];
+            for (int i = 0; i < length; i++) {
+                value[i] = (byte) (0xF0 + i);
+            }
+            // a value that ends at the end of its array, and one inside an array with non-zero bytes around it
+            byte[] padded = new byte[length + 2 * INLINE_SIZE];
+            Arrays.fill(padded, (byte) 0xFF);
+            System.arraycopy(value, 0, padded, 3, length);
+            Slice expected = Slices.wrappedBuffer(value);
+            for (Slice slice : List.of(Slices.wrappedBuffer(value.clone()), Slices.wrappedBuffer(padded, 3, length))) {
+                VariableWidthViewBlockBuilder blockBuilder = new VariableWidthViewBlockBuilder(null, 1, 0);
+                blockBuilder.writeEntry(slice);
+                VariableWidthViewBlock built = blockBuilder.buildValueBlock();
+                VariableWidthViewBlock wrapped = VariableWidthViewBlock.fromOffsets(1, slice, new int[] {0, length}, Optional.empty());
+                VariableWidthViewBlock wrappedAtOffset = VariableWidthViewBlock.fromOffsets(1, Slices.wrappedBuffer(padded), new int[] {3, 3 + length}, Optional.empty());
+                for (VariableWidthViewBlock block : List.of(built, wrapped, wrappedAtOffset)) {
+                    assertThat(block.getSlice(0)).isEqualTo(expected);
+                    assertThat(block.hashValue(0)).isEqualTo(XxHash64.hash(expected));
+                    assertThat(block.valueEquals(0, built, 0)).isTrue();
+                    assertThat(block.compareValue(0, built, 0)).isZero();
+                    if (length <= INLINE_SIZE) {
+                        byte[] views = block.getRawViews();
+                        for (int i = Integer.BYTES + length; i < VariableWidthViewBlock.VIEW_SIZE; i++) {
+                            assertThat(views[i]).isZero();
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    @Test
+    public void testOrderOfValuesThatDifferInTrailingBytes()
+    {
+        List<Slice> values = new ArrayList<>();
+        for (String value : List.of("", "\0", "ab", "ab\0", "ab\0\0", "abcd", "abcd\0", "abcdefgh", "abcdefgh\0", "abcdefghijk", "abcdefghijk\0", "abcdefghijkl", "abcdefghijkl\0", "abcdefghijkla")) {
+            values.add(utf8Slice(value));
+        }
+        values.add(Slices.wrappedBuffer(new byte[] {'a', 'b', 'c', 'd', (byte) 0xFF}));
+        values.add(Slices.wrappedBuffer(new byte[] {'a', 'b', 'c', 'd', 'e', 'f', 'g', 'h', 'i', 'j', 'k', (byte) 0xFF}));
+        values.add(Slices.wrappedBuffer(new byte[] {'a', 'b', 'c', 'd', 'e', 'f', 'g', 'h', 'i', 'j', 'k', (byte) 0xFF, 0}));
+        VariableWidthViewBlock block = build(values);
+        VariableWidthViewBlock otherBlock = build(values.reversed());
+        for (int left = 0; left < values.size(); left++) {
+            for (int right = 0; right < values.size(); right++) {
+                int expected = Integer.signum(values.get(left).compareTo(values.get(right)));
+                assertThat(Integer.signum(block.compareValue(left, otherBlock, values.size() - 1 - right))).isEqualTo(expected);
+                assertThat(block.valueEquals(left, otherBlock, values.size() - 1 - right)).isEqualTo(expected == 0);
+            }
+        }
+    }
+
+    @Test
+    public void testAppendRepeatedSharesValue()
+    {
+        Slice longValue = utf8Slice("a value that is stored out of line");
+        VariableWidthViewBlockBuilder sourceBuilder = new VariableWidthViewBlockBuilder(null, 3, 0);
+        sourceBuilder.writeEntry(utf8Slice("short"));
+        sourceBuilder.writeEntry(longValue);
+        sourceBuilder.appendNull();
+        VariableWidthViewBlock source = sourceBuilder.buildValueBlock();
+
+        VariableWidthViewBlockBuilder blockBuilder = new VariableWidthViewBlockBuilder(null, 1, 0);
+        blockBuilder.appendRepeated(source, 1, 5);
+        blockBuilder.appendRepeated(source, 0, 3);
+        blockBuilder.appendRepeated(source, 2, 2);
+        blockBuilder.appendRepeated(source, 1, 0);
+        blockBuilder.writeEntry(longValue);
+        VariableWidthViewBlock block = blockBuilder.buildValueBlock();
+
+        List<String> expected = new ArrayList<>();
+        expected.addAll(Collections.nCopies(5, longValue.toStringUtf8()));
+        expected.addAll(Collections.nCopies(3, "short"));
+        expected.addAll(Collections.nCopies(2, null));
+        expected.add(longValue.toStringUtf8());
+        assertThat(blockToValues(block)).isEqualTo(expected);
+        assertThat(block.getSizeInBytes()).isEqualTo(6L * longValue.length() + 3 * 5 + 11L * (Integer.BYTES + Byte.BYTES));
+        // the repeated value is stored once, and the value written after it follows it in the buffer
+        byte[] views = block.getRawViews();
+        for (int position = 1; position < 5; position++) {
+            assertThat(VariableWidthViewBlock.bufferOffset(views, position * VariableWidthViewBlock.VIEW_SIZE)).isEqualTo(VariableWidthViewBlock.bufferOffset(views, 0));
+        }
+        assertThat(VariableWidthViewBlock.bufferOffset(views, 10 * VariableWidthViewBlock.VIEW_SIZE)).isEqualTo(VariableWidthViewBlock.bufferOffset(views, 0) + longValue.length());
+        assertThat(blockToValues(block.copyRegion(0, block.getPositionCount()))).isEqualTo(expected);
+        assertThat(blockToValues(block.copyRegion(2, 7))).isEqualTo(expected.subList(2, 9));
+        assertThat(blockToValues(block.copyPositions(new int[] {10, 0, 9, 4, 5}, 0, 5)))
+                .containsExactly(expected.get(10), expected.get(0), expected.get(9), expected.get(4), expected.get(5));
+    }
+
+    @Test
+    public void testCopiesOfValuesInSeveralBuffers()
+    {
+        List<Slice> values = randomValues(new Random(5), 3000);
+        VariableWidthViewBlockBuilder blockBuilder = new VariableWidthViewBlockBuilder(null, 1, 0);
+        for (int i = 0; i < values.size(); i++) {
+            if (i % 13 == 0) {
+                blockBuilder.appendNull();
+            }
+            else {
+                blockBuilder.writeEntry(values.get(i));
+            }
+        }
+        VariableWidthViewBlock block = blockBuilder.buildValueBlock();
+        assertThat(block.getRawBuffers().length).isGreaterThan(1);
+        List<String> expected = blockToValues(block);
+
+        VariableWidthViewBlock region = block.getRegion(101, 2500);
+        VariableWidthViewBlock copiedRegion = region.copyRegion(7, 2400);
+        assertThat(blockToValues(copiedRegion)).isEqualTo(expected.subList(108, 2508));
+        assertThat(copiedRegion.getRawBuffers().length).isEqualTo(1);
+        assertThat(copiedRegion.copyRegion(0, copiedRegion.getPositionCount())).isSameAs(copiedRegion);
+
+        int[] positions = new int[region.getPositionCount()];
+        for (int i = 0; i < positions.length; i++) {
+            positions[i] = (i * 7) % positions.length;
+        }
+        List<String> expectedPositions = new ArrayList<>();
+        for (int position : positions) {
+            expectedPositions.add(expected.get(101 + position));
+        }
+        assertThat(blockToValues(region.copyPositions(positions, 0, positions.length))).isEqualTo(expectedPositions);
+
+        VariableWidthViewBlockBuilder appended = new VariableWidthViewBlockBuilder(null, 1, 0);
+        appended.appendRange(region, 5, 1000);
+        appended.appendPositions(region, positions, 0, positions.length);
+        List<String> expectedAppended = new ArrayList<>(expected.subList(106, 1106));
+        expectedAppended.addAll(expectedPositions);
+        assertThat(blockToValues(appended.buildValueBlock())).isEqualTo(expectedAppended);
     }
 
     @Test

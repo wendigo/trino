@@ -32,7 +32,7 @@ import io.trino.orc.stream.OrcChunkLoader;
 import io.trino.orc.stream.OrcInputStream;
 import io.trino.spi.Page;
 import io.trino.spi.block.Block;
-import io.trino.spi.block.VariableWidthBlockBuilder;
+import io.trino.spi.block.VariableWidthViewBlockBuilder;
 import io.trino.spi.type.SqlDate;
 import io.trino.spi.type.SqlTimestamp;
 import io.trino.spi.type.Type;
@@ -125,7 +125,7 @@ public class TestOrcWriter
                     false,
                     OrcWriteValidationMode.BOTH,
                     stats);
-            VariableWidthBlockBuilder blockBuilder = VARCHAR.createBlockBuilder(null, 1);
+            VariableWidthViewBlockBuilder blockBuilder = VARCHAR.createBlockBuilder(null, 1);
             blockBuilder.writeEntry(Slices.utf8Slice("value"));
             writer.write(new Page(blockBuilder.build()));
             assertThat(stats.getWriterSizeInBytes()).isPositive();
@@ -185,7 +185,7 @@ public class TestOrcWriter
             // write down some data with unsorted streams
             Block[] blocks = new Block[data.length];
             int entries = 65536;
-            VariableWidthBlockBuilder blockBuilder = VARCHAR.createBlockBuilder(null, entries);
+            VariableWidthViewBlockBuilder blockBuilder = VARCHAR.createBlockBuilder(null, entries);
             for (int i = 0; i < data.length; i++) {
                 byte[] bytes = data[i].getBytes(UTF_8);
                 for (int j = 0; j < entries; j++) {
@@ -194,7 +194,7 @@ public class TestOrcWriter
                     blockBuilder.writeEntry(Slices.wrappedBuffer(bytes, 0, bytes.length));
                 }
                 blocks[i] = blockBuilder.build();
-                blockBuilder = (VariableWidthBlockBuilder) blockBuilder.newBlockBuilderLike(null);
+                blockBuilder = (VariableWidthViewBlockBuilder) blockBuilder.newBlockBuilderLike(null);
             }
 
             writer.write(new Page(blocks));

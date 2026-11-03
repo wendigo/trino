@@ -86,12 +86,22 @@ public class CompressingEncryptingPageSerializer
     @Override
     public Slice serialize(Page page)
     {
-        output.startPage(page.getPositionCount(), toIntExact(page.getSizeInBytes()));
+        output.startPage(page.getPositionCount(), toIntExact(estimatedRawPageSize(page)));
         writeRawPage(page, output, blockEncodingSerde);
         SerializedPage serializedPage = output.closePage();
         inputBytes += serializedPage.uncompressedSize();
         outputBytes += serializedPage.compressedSize();
         return serializedPage.slice();
+    }
+
+    // the size of the blocks in memory can differ from the number of bytes their encodings write
+    private long estimatedRawPageSize(Page page)
+    {
+        long size = Integer.BYTES;
+        for (int channel = 0; channel < page.getChannelCount(); channel++) {
+            size += blockEncodingSerde.estimatedWriteSize(page.getBlock(channel));
+        }
+        return size;
     }
 
     @Override

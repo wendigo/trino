@@ -28,7 +28,9 @@ import io.trino.orc.stream.LongInputStream;
 import io.trino.spi.TrinoException;
 import io.trino.spi.block.Block;
 import io.trino.spi.block.RunLengthEncodedBlock;
+import io.trino.spi.block.ValueBlock;
 import io.trino.spi.block.VariableWidthBlock;
+import io.trino.spi.block.VariableWidthViewBlock;
 import jakarta.annotation.Nullable;
 
 import java.io.IOException;
@@ -63,6 +65,7 @@ public class SliceDirectColumnReader
 
     private final int maxCodePointCount;
     private final boolean isCharType;
+    private final boolean isVarcharType;
     private final OrcColumn column;
 
     private int readOffset;
@@ -82,10 +85,11 @@ public class SliceDirectColumnReader
 
     private boolean rowGroupOpen;
 
-    public SliceDirectColumnReader(OrcColumn column, int maxCodePointCount, boolean isCharType)
+    public SliceDirectColumnReader(OrcColumn column, int maxCodePointCount, boolean isCharType, boolean isVarcharType)
     {
         this.maxCodePointCount = maxCodePointCount;
         this.isCharType = isCharType;
+        this.isVarcharType = isVarcharType;
 
         this.column = requireNonNull(column, "column is null");
     }
@@ -181,7 +185,7 @@ public class SliceDirectColumnReader
         readOffset = 0;
         nextBatchSize = 0;
         if (totalLength == 0) {
-            return new VariableWidthBlock(currentBatchSize, EMPTY_SLICE, offsetVector, Optional.ofNullable(valueIsValid));
+            return createSliceBlock(isVarcharType, currentBatchSize, EMPTY_SLICE, offsetVector, Optional.ofNullable(valueIsValid));
         }
         if (totalLength > ONE_GIGABYTE) {
             throw new TrinoException(
@@ -230,12 +234,21 @@ public class SliceDirectColumnReader
         }
 
         // this can lead to over-retention but unlikely to happen given truncation rarely happens
-        return new VariableWidthBlock(currentBatchSize, slice, offsetVector, Optional.ofNullable(valueIsValid));
+        return createSliceBlock(isVarcharType, currentBatchSize, slice, offsetVector, Optional.ofNullable(valueIsValid));
     }
 
     private Block readAllNullsBlock()
     {
-        return RunLengthEncodedBlock.create(new VariableWidthBlock(1, EMPTY_SLICE, new int[2], Optional.of(new long[] {0})), nextBatchSize);
+        return RunLengthEncodedBlock.create(createSliceBlock(isVarcharType, 1, EMPTY_SLICE, new int[2], Optional.of(new long[] {0})), nextBatchSize);
+    }
+
+    /// VARCHAR values use [VariableWidthViewBlock], and CHAR and VARBINARY values use [VariableWidthBlock].
+    static ValueBlock createSliceBlock(boolean isVarcharType, int positionCount, Slice slice, int[] offsets, Optional<long[]> valueIsValid)
+    {
+        if (isVarcharType) {
+            return VariableWidthViewBlock.fromOffsets(positionCount, slice, offsets, valueIsValid);
+        }
+        return new VariableWidthBlock(positionCount, slice, offsets, valueIsValid);
     }
 
     private void openRowGroup()

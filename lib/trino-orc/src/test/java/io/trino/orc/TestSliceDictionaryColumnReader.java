@@ -74,7 +74,7 @@ public class TestSliceDictionaryColumnReader
                 new OrcMetadataReader(new OrcReaderOptions()),
                 Optional.empty());
         AggregatedMemoryContext memoryContext = newSimpleAggregatedMemoryContext();
-        SliceDictionaryColumnReader columnReader = new SliceDictionaryColumnReader(columns.get(0), memoryContext.newLocalMemoryContext(TestSliceDictionaryColumnReader.class.getSimpleName()), -1, false);
+        SliceDictionaryColumnReader columnReader = new SliceDictionaryColumnReader(columns.get(0), memoryContext.newLocalMemoryContext(TestSliceDictionaryColumnReader.class.getSimpleName()), -1, false, true);
 
         List<StripeInformation> stripeInformations = footer.getStripes();
         for (StripeInformation stripeInformation : stripeInformations) {

@@ -24,7 +24,7 @@ import io.trino.orc.metadata.OrcType;
 import io.trino.spi.Page;
 import io.trino.spi.block.Block;
 import io.trino.spi.block.RowBlock;
-import io.trino.spi.block.VariableWidthBlockBuilder;
+import io.trino.spi.block.VariableWidthViewBlockBuilder;
 import io.trino.spi.type.StandardTypes;
 import io.trino.spi.type.Type;
 import io.trino.spi.type.TypeParameter;
@@ -239,14 +239,14 @@ public class TestStructColumnReader
 
         int entries = 10;
 
-        VariableWidthBlockBuilder fieldBlockBuilder = VARCHAR.createBlockBuilder(null, entries);
+        VariableWidthViewBlockBuilder fieldBlockBuilder = VARCHAR.createBlockBuilder(null, entries);
         for (int fieldId = 0; fieldId < data.size(); fieldId++) {
             Slice fieldValue = Slices.utf8Slice(data.get(fieldId));
             for (int rowId = 0; rowId < entries; rowId++) {
                 fieldBlockBuilder.writeEntry(fieldValue);
             }
             fieldBlocks[fieldId] = fieldBlockBuilder.build();
-            fieldBlockBuilder = (VariableWidthBlockBuilder) fieldBlockBuilder.newBlockBuilderLike(null);
+            fieldBlockBuilder = (VariableWidthViewBlockBuilder) fieldBlockBuilder.newBlockBuilderLike(null);
         }
         Block rowBlock = RowBlock.fromFieldBlocks(entries, fieldBlocks);
         writer.write(new Page(rowBlock));

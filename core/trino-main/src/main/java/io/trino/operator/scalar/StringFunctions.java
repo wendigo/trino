@@ -22,7 +22,7 @@ import io.airlift.slice.Slices;
 import io.trino.spi.TrinoException;
 import io.trino.spi.block.Block;
 import io.trino.spi.block.BlockBuilder;
-import io.trino.spi.block.VariableWidthBlockBuilder;
+import io.trino.spi.block.VariableWidthViewBlockBuilder;
 import io.trino.spi.function.Constraint;
 import io.trino.spi.function.Description;
 import io.trino.spi.function.LiteralParameter;
@@ -452,7 +452,7 @@ public final class StringFunctions
         }
 
         int expectedBytes = string.length() - (expectedEntries - 1) * delimiter.length();
-        BlockBuilder parts = new VariableWidthBlockBuilder(null, expectedEntries, expectedBytes);
+        BlockBuilder parts = new VariableWidthViewBlockBuilder(null, expectedEntries, expectedBytes);
         index = 0;
         for (int part = 1; part < expectedEntries; part++) {
             int splitIndex = string.indexOf(delimiter, index);

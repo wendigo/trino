@@ -19,6 +19,7 @@ import io.airlift.slice.SliceOutput;
 
 import static io.trino.spi.block.EncoderUtil.decodeValidityAsLongs;
 import static io.trino.spi.block.EncoderUtil.encodeValidityAsLongs;
+import static io.trino.spi.block.EncoderUtil.encodedValiditySize;
 
 public class VariantBlockEncoding
         implements BlockEncoding
@@ -48,6 +49,16 @@ public class VariantBlockEncoding
         blockEncodingSerde.writeBlock(sliceOutput, variantBlock.getValues());
 
         encodeValidityAsLongs(sliceOutput, variantBlock.getRawValueIsValid(), variantBlock.getOffsetBase(), variantBlock.getPositionCount());
+    }
+
+    @Override
+    public long estimatedWriteSize(BlockEncodingSerde blockEncodingSerde, Block block)
+    {
+        VariantBlock variantBlock = (VariantBlock) block;
+        return Integer.BYTES
+                + blockEncodingSerde.estimatedWriteSize(variantBlock.getMetadata())
+                + blockEncodingSerde.estimatedWriteSize(variantBlock.getValues())
+                + encodedValiditySize(variantBlock.getRawValueIsValid(), variantBlock.getPositionCount());
     }
 
     @Override

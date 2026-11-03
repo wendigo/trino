@@ -26,7 +26,7 @@ import io.trino.plugin.base.util.Lazy;
 import io.trino.spi.Page;
 import io.trino.spi.PageBuilder;
 import io.trino.spi.QueryId;
-import io.trino.spi.block.VariableWidthBlockBuilder;
+import io.trino.spi.block.VariableWidthViewBlockBuilder;
 import io.trino.spi.exchange.ExchangeSink;
 import io.trino.spi.exchange.ExchangeSinkInstanceHandle;
 import org.junit.jupiter.api.Test;
@@ -308,7 +308,7 @@ public class TestSpoolingExchangeOutputBuffer
         PageBuilder pageBuilder = new PageBuilder(ImmutableList.of(VARCHAR));
         pageBuilder.declarePosition();
         Slice valueSlice = utf8Slice(value);
-        VariableWidthBlockBuilder blockBuilder = (VariableWidthBlockBuilder) pageBuilder.getBlockBuilder(0);
+        VariableWidthViewBlockBuilder blockBuilder = (VariableWidthViewBlockBuilder) pageBuilder.getBlockBuilder(0);
         blockBuilder.writeEntry(valueSlice);
         Page page = pageBuilder.build();
         PageSerializer serializer = createTestingPagesSerdeFactory().createSerializer(Optional.empty());

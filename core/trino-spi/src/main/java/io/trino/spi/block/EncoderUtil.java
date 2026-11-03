@@ -25,6 +25,14 @@ final class EncoderUtil
 {
     private EncoderUtil() {}
 
+    /**
+     * Returns the number of bytes {@link #encodeValidityAsLongs} writes.
+     */
+    static long encodedValiditySize(@Nullable long[] validity, int positionCount)
+    {
+        return Byte.BYTES + (validity == null ? 0 : Long.BYTES * (long) wordsForBits(positionCount));
+    }
+
     public static void encodeValidityAsLongs(SliceOutput sliceOutput, @Nullable long[] validity, int offset, int positionCount)
     {
         sliceOutput.writeBoolean(validity != null);

@@ -149,14 +149,14 @@ public class TestStateCompiler
         SliceState deserializedState = factory.createSingleState();
 
         state.setSlice(null);
-        BlockBuilder nullBlockBuilder = VARCHAR.createBlockBuilder(null, 1);
+        BlockBuilder nullBlockBuilder = serializer.getSerializedType().createBlockBuilder(null, 1);
         serializer.serialize(state, nullBlockBuilder);
         Block nullBlock = nullBlockBuilder.build();
         serializer.deserialize(nullBlock, 0, deserializedState);
         assertThat(deserializedState.getSlice()).isEqualTo(state.getSlice());
 
         state.setSlice(utf8Slice("test"));
-        BlockBuilder builder = VARCHAR.createBlockBuilder(null, 1);
+        BlockBuilder builder = serializer.getSerializedType().createBlockBuilder(null, 1);
         serializer.serialize(state, builder);
         Block block = builder.build();
         serializer.deserialize(block, 0, deserializedState);

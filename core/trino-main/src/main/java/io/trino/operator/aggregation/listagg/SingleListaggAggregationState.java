@@ -16,7 +16,7 @@ package io.trino.operator.aggregation.listagg;
 import io.airlift.slice.DynamicSliceOutput;
 import io.airlift.slice.SliceOutput;
 import io.trino.spi.block.SqlRow;
-import io.trino.spi.block.VariableWidthBlockBuilder;
+import io.trino.spi.block.VariableWidthViewBlockBuilder;
 import io.trino.spi.function.AccumulatorState;
 
 import static com.google.common.base.Preconditions.checkArgument;
@@ -43,7 +43,7 @@ public class SingleListaggAggregationState
     }
 
     @Override
-    public void write(VariableWidthBlockBuilder blockBuilder)
+    public void write(VariableWidthViewBlockBuilder blockBuilder)
     {
         if (size() == 0) {
             blockBuilder.appendNull();
