@@ -35,6 +35,7 @@ import org.apache.parquet.column.ColumnDescriptor;
 import org.apache.parquet.column.values.ValuesWriter;
 import org.apache.parquet.column.values.dictionary.DictionaryValuesWriter;
 import org.apache.parquet.column.values.rle.RunLengthBitPackingHybridValuesWriter;
+import org.apache.parquet.io.api.Binary;
 import org.apache.parquet.schema.PrimitiveType;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
@@ -58,7 +59,9 @@ import static io.trino.parquet.reader.TestingColumnReader.DataPageVersion.V1;
 import static io.trino.parquet.reader.TestingColumnReader.getDictionaryPage;
 import static io.trino.parquet.reader.TestingValuesWriters.getValuesWriter;
 import static io.trino.spi.type.IntegerType.INTEGER;
+import static io.trino.spi.type.VarcharType.VARCHAR;
 import static org.apache.parquet.format.CompressionCodec.UNCOMPRESSED;
+import static org.apache.parquet.schema.PrimitiveType.PrimitiveTypeName.BINARY;
 import static org.apache.parquet.schema.PrimitiveType.PrimitiveTypeName.INT32;
 import static org.apache.parquet.schema.Type.Repetition.OPTIONAL;
 import static org.apache.parquet.schema.Type.Repetition.REQUIRED;
@@ -500,6 +503,45 @@ public class TestFlatColumnReader
             }
         }
         return createNullableDataPage(V1, writer, OPTIONAL_FIELD, isNull);
+    }
+
+    @Test
+    public void testVarcharValuesReferenceOwnedPages()
+            throws IOException
+    {
+        PrimitiveType type = new PrimitiveType(REQUIRED, BINARY, "");
+        PrimitiveField field = new PrimitiveField(VARCHAR, true, new ColumnDescriptor(new String[] {"test"}, type, 0, 0), 0);
+        ValuesWriter writer = getValuesWriter(PLAIN, BINARY, OptionalInt.empty());
+        List<String> values = new ArrayList<>();
+        for (int i = 0; i < 200; i++) {
+            // every fourth value is too long to be stored in its view
+            String value = i % 4 == 0 ? "a long value number " + i + " that is stored out of line" : "v" + i;
+            values.add(value);
+            writer.writeBytes(Binary.fromString(value));
+        }
+        byte[] valueBytes = writer.getBytes().toByteArray();
+
+        long outOfLineBytes = 0;
+        for (String value : values) {
+            outOfLineBytes += value.length() > 12 ? value.length() : 0;
+        }
+
+        long[] retainedSizes = new long[2];
+        for (int i = 0; i < 2; i++) {
+            boolean dataOwned = i == 0;
+            DataPage page = new DataPageV1(Slices.wrappedBuffer(valueBytes), values.size(), valueBytes.length, OptionalLong.empty(), RLE, RLE, PLAIN, 0, dataOwned);
+            ColumnReader reader = createColumnReader(field);
+            reader.setPageReader(getPlainPageReaderMock(page), Optional.empty());
+            Block block = readBlock(reader, values.size(), values.size());
+            for (int position = 0; position < values.size(); position++) {
+                assertThat(VARCHAR.getSlice(block, position).toStringUtf8()).isEqualTo(values.get(position));
+            }
+            retainedSizes[i] = block.getRetainedSizeInBytes();
+        }
+        // the values of a page that owns its bytes reference the page, so the block retains it with its views; the
+        // values of a page that does not are copied, without the short values and the length prefixes
+        assertThat(retainedSizes[0]).isGreaterThan(valueBytes.length + 16L * values.size());
+        assertThat(retainedSizes[0] - retainedSizes[1]).isBetween(valueBytes.length - outOfLineBytes - 16, valueBytes.length - outOfLineBytes + 16);
     }
 
     private static PageReader getPlainPageReaderMock(DataPage... pages)

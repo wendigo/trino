@@ -157,7 +157,7 @@ public final class PageReader
             }
             Slice slice = decryptSliceIfNeeded(compressedPage.getSlice(), dataPageAad);
             if (compressedPage instanceof DataPageV1 dataPageV1) {
-                PageData pageData = getPageData(slice, dataPageV1.getUncompressedSize(), arePagesCompressed());
+                PageData pageData = getPageData(slice, dataPageV1.getUncompressedSize(), arePagesCompressed(), dataPageV1.isDataOwned());
                 DataPage page = new DataPageV1(
                         pageData.data(),
                         dataPageV1.getValueCount(),
@@ -166,7 +166,8 @@ public final class PageReader
                         dataPageV1.getRepetitionLevelEncoding(),
                         dataPageV1.getDefinitionLevelEncoding(),
                         dataPageV1.getValueEncoding(),
-                        dataPageV1.getPageIndex());
+                        dataPageV1.getPageIndex(),
+                        pageData.owned());
                 replaceCurrentPage(page, pageData.retainedBytes(), pageData.owned());
                 return page;
             }
@@ -177,7 +178,7 @@ public final class PageReader
             int uncompressedDataSize = dataPageV2.getUncompressedSize()
                     - dataPageV2.getDefinitionLevels().length()
                     - dataPageV2.getRepetitionLevels().length();
-            PageData pageData = getPageData(slice, uncompressedDataSize, dataPageV2.isCompressed());
+            PageData pageData = getPageData(slice, uncompressedDataSize, dataPageV2.isCompressed(), dataPageV2.isDataOwned());
             Slice repetitionLevels = copySlice(dataPageV2.getRepetitionLevels());
             Slice definitionLevels = copySlice(dataPageV2.getDefinitionLevels());
             DataPage page = new DataPageV2(
@@ -192,7 +193,8 @@ public final class PageReader
                     dataPageV2.getFirstRowIndex(),
                     dataPageV2.getStatistics(),
                     false,
-                    dataPageV2.getPageIndex());
+                    dataPageV2.getPageIndex(),
+                    true);
             replaceCurrentPage(
                     page,
                     repetitionLevels.length() + definitionLevels.length() + pageData.retainedBytes(),
@@ -220,11 +222,12 @@ public final class PageReader
         try {
             DictionaryPage compressedDictionaryPage = (DictionaryPage) nextCompressedPage();
             Slice slice = decryptSliceIfNeeded(compressedDictionaryPage.getSlice(), dictionaryPageAad);
-            PageData pageData = getPageData(slice, compressedDictionaryPage.getUncompressedSize(), arePagesCompressed());
+            PageData pageData = getPageData(slice, compressedDictionaryPage.getUncompressedSize(), arePagesCompressed(), compressedDictionaryPage.isDataOwned());
             DictionaryPage dictionaryPage = new DictionaryPage(
                     pageData.data(),
                     compressedDictionaryPage.getDictionarySize(),
-                    compressedDictionaryPage.getEncoding());
+                    compressedDictionaryPage.getEncoding(),
+                    pageData.owned());
             replaceCurrentPage(dictionaryPage, pageData.retainedBytes(), pageData.owned());
             return dictionaryPage;
         }
@@ -396,7 +399,7 @@ public final class PageReader
         return wrappedBuffer(slice.getBytes());
     }
 
-    private PageData getPageData(Slice data, int uncompressedSize, boolean compressed)
+    private PageData getPageData(Slice data, int uncompressedSize, boolean compressed, boolean dataOwned)
             throws IOException
     {
         if (compressed) {
@@ -408,7 +411,8 @@ public final class PageReader
         if (blockDecryptor.isPresent()) {
             return new PageData(data, data.length(), true);
         }
-        return new PageData(data, currentPageRetainedBytes, currentPageOwned);
+        // the bytes of a page that owns them stay valid when the input advances
+        return new PageData(data, currentPageRetainedBytes, currentPageOwned || dataOwned);
     }
 
     private static BufferedPage copyPage(Page page)
@@ -424,7 +428,8 @@ public final class PageReader
                             dataPageV1.getRepetitionLevelEncoding(),
                             dataPageV1.getDefinitionLevelEncoding(),
                             dataPageV1.getValueEncoding(),
-                            dataPageV1.getPageIndex()),
+                            dataPageV1.getPageIndex(),
+                            true),
                     data.length(),
                     true);
         }
@@ -450,7 +455,8 @@ public final class PageReader
                             dataPageV2.getFirstRowIndex(),
                             dataPageV2.getStatistics(),
                             dataPageV2.isCompressed(),
-                            dataPageV2.getPageIndex()),
+                            dataPageV2.getPageIndex(),
+                            true),
                     bytes.length,
                     true);
         }
@@ -461,7 +467,8 @@ public final class PageReader
                             data,
                             dictionaryPage.getUncompressedSize(),
                             dictionaryPage.getDictionarySize(),
-                            dictionaryPage.getEncoding()),
+                            dictionaryPage.getEncoding(),
+                            true),
                     data.length(),
                     true);
         }

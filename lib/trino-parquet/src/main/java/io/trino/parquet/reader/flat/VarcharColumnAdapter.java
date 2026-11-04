@@ -14,19 +14,74 @@
 package io.trino.parquet.reader.flat;
 
 import io.trino.spi.block.Block;
-import io.trino.spi.block.VariableWidthViewBlock;
+import io.trino.spi.block.VariableWidthViewBuffer;
 
+import java.util.List;
 import java.util.Optional;
 
+/**
+ * Builds {@link io.trino.spi.block.VariableWidthViewBlock} over the bytes the values were decoded from, which are
+ * referenced rather than copied. Null positions keep the zero views the buffer is created with.
+ */
 public final class VarcharColumnAdapter
-        extends BinaryColumnAdapter
+        implements ColumnAdapter<VariableWidthViewBuffer>
 {
     public static final VarcharColumnAdapter VARCHAR_ADAPTER = new VarcharColumnAdapter();
 
     @Override
-    protected Block createBlock(BinaryBuffer values, Optional<long[]> valueIsValid)
+    public VariableWidthViewBuffer createBuffer(int size)
     {
-        // the views reference the values in the chunks, so values of several pages are not copied to a single slice
-        return VariableWidthViewBlock.fromOffsets(values.getValueCount(), values.getChunks(), values.getOffsets(), valueIsValid);
+        return new VariableWidthViewBuffer(size);
+    }
+
+    @Override
+    public VariableWidthViewBuffer createTemporaryBuffer(int currentOffset, int size, VariableWidthViewBuffer buffer)
+    {
+        return buffer.createTemporary(size);
+    }
+
+    @Override
+    public void copyValue(VariableWidthViewBuffer source, int sourceIndex, VariableWidthViewBuffer destination, int destinationIndex)
+    {
+        destination.copyViews(source, sourceIndex, destinationIndex, 1);
+    }
+
+    @Override
+    public void copyValues(VariableWidthViewBuffer source, int sourceIndex, VariableWidthViewBuffer destination, int destinationIndex, int length)
+    {
+        destination.copyViews(source, sourceIndex, destinationIndex, length);
+    }
+
+    @Override
+    public Block createNullableBlock(long[] valueIsValid, VariableWidthViewBuffer values)
+    {
+        return values.build(Optional.of(valueIsValid));
+    }
+
+    @Override
+    public Block createNonNullBlock(VariableWidthViewBuffer values)
+    {
+        return values.build(Optional.empty());
+    }
+
+    @Override
+    public void decodeDictionaryIds(VariableWidthViewBuffer values, int offset, int length, int[] ids, VariableWidthViewBuffer dictionary)
+    {
+        values.setDictionaryValues(offset, dictionary, ids, 0, length);
+    }
+
+    @Override
+    public long getSizeInBytes(VariableWidthViewBuffer values)
+    {
+        return values.getRetainedSizeInBytes();
+    }
+
+    @Override
+    public VariableWidthViewBuffer merge(List<VariableWidthViewBuffer> buffers)
+    {
+        if (buffers.isEmpty()) {
+            return new VariableWidthViewBuffer(0);
+        }
+        return VariableWidthViewBuffer.merge(buffers);
     }
 }

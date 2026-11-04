@@ -31,9 +31,19 @@ public class DictionaryPage
         this(slice, slice.length(), dictionarySize, encoding);
     }
 
+    public DictionaryPage(Slice slice, int dictionarySize, ParquetEncoding encoding, boolean dataOwned)
+    {
+        this(slice, slice.length(), dictionarySize, encoding, dataOwned);
+    }
+
     public DictionaryPage(Slice slice, int uncompressedSize, int dictionarySize, ParquetEncoding encoding)
     {
-        super(uncompressedSize);
+        this(slice, uncompressedSize, dictionarySize, encoding, false);
+    }
+
+    public DictionaryPage(Slice slice, int uncompressedSize, int dictionarySize, ParquetEncoding encoding, boolean dataOwned)
+    {
+        super(uncompressedSize, dataOwned);
         this.slice = requireNonNull(slice, "slice is null");
         this.dictionarySize = dictionarySize;
         this.encoding = requireNonNull(encoding, "encoding is null");

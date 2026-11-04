@@ -41,6 +41,7 @@ import static com.google.common.base.MoreObjects.toStringHelper;
 import static com.google.common.base.Preconditions.checkState;
 import static com.google.common.base.Verify.verify;
 import static io.airlift.slice.SizeOf.instanceSize;
+import static io.airlift.slice.SizeOf.sizeOf;
 import static io.airlift.slice.Slices.EMPTY_SLICE;
 import static io.airlift.units.DataSize.Unit.GIGABYTE;
 import static io.trino.orc.metadata.Stream.StreamKind.DATA;
@@ -84,6 +85,8 @@ public class SliceDirectColumnReader
     private ByteArrayInputStream dataStream;
 
     private boolean rowGroupOpen;
+
+    private int[] varcharOffsetVector = new int[0];
 
     public SliceDirectColumnReader(OrcColumn column, int maxCodePointCount, boolean isCharType, boolean isVarcharType)
     {
@@ -144,8 +147,18 @@ public class SliceDirectColumnReader
         long[] valueIsValid = null;
 
         // We will use the offsetVector as the buffer to read the length values from lengthStream,
-        // and the length values will be converted in-place to an offset vector.
-        int[] offsetVector = new int[nextBatchSize + 1];
+        // and the length values will be converted in-place to an offset vector. The views of a VARCHAR block do not
+        // reference the offsets, so the vector is reused.
+        int[] offsetVector;
+        if (isVarcharType) {
+            if (varcharOffsetVector.length < nextBatchSize + 1) {
+                varcharOffsetVector = new int[nextBatchSize + 1];
+            }
+            offsetVector = varcharOffsetVector;
+        }
+        else {
+            offsetVector = new int[nextBatchSize + 1];
+        }
 
         if (presentStream == null) {
             lengthStream.next(offsetVector, nextBatchSize);
@@ -185,6 +198,8 @@ public class SliceDirectColumnReader
         readOffset = 0;
         nextBatchSize = 0;
         if (totalLength == 0) {
+            // all lengths are zero, so the vector holds the offsets, except for the last one in a reused vector
+            offsetVector[currentBatchSize] = 0;
             return createSliceBlock(isVarcharType, currentBatchSize, EMPTY_SLICE, offsetVector, Optional.ofNullable(valueIsValid));
         }
         if (totalLength > ONE_GIGABYTE) {
@@ -313,6 +328,6 @@ public class SliceDirectColumnReader
     @Override
     public long getRetainedSizeInBytes()
     {
-        return INSTANCE_SIZE;
+        return INSTANCE_SIZE + sizeOf(varcharOffsetVector);
     }
 }

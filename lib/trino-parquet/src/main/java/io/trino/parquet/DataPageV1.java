@@ -38,7 +38,21 @@ public final class DataPageV1
             ParquetEncoding valuesEncoding,
             int pageIndex)
     {
-        super(uncompressedSize, valueCount, firstRowIndex, pageIndex);
+        this(slice, valueCount, uncompressedSize, firstRowIndex, repetitionLevelEncoding, definitionLevelEncoding, valuesEncoding, pageIndex, false);
+    }
+
+    public DataPageV1(
+            Slice slice,
+            int valueCount,
+            int uncompressedSize,
+            OptionalLong firstRowIndex,
+            ParquetEncoding repetitionLevelEncoding,
+            ParquetEncoding definitionLevelEncoding,
+            ParquetEncoding valuesEncoding,
+            int pageIndex,
+            boolean dataOwned)
+    {
+        super(uncompressedSize, valueCount, firstRowIndex, pageIndex, dataOwned);
         this.slice = requireNonNull(slice, "slice is null");
         this.repetitionLevelEncoding = repetitionLevelEncoding;
         this.definitionLevelEncoding = definitionLevelEncoding;

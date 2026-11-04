@@ -47,7 +47,25 @@ public final class DataPageV2
             boolean isCompressed,
             int pageIndex)
     {
-        super(uncompressedSize, valueCount, firstRowIndex, pageIndex);
+        this(rowCount, nullCount, valueCount, repetitionLevels, definitionLevels, dataEncoding, slice, uncompressedSize, firstRowIndex, statistics, isCompressed, pageIndex, false);
+    }
+
+    public DataPageV2(
+            int rowCount,
+            int nullCount,
+            int valueCount,
+            Slice repetitionLevels,
+            Slice definitionLevels,
+            ParquetEncoding dataEncoding,
+            Slice slice,
+            int uncompressedSize,
+            OptionalLong firstRowIndex,
+            Statistics<?> statistics,
+            boolean isCompressed,
+            int pageIndex,
+            boolean dataOwned)
+    {
+        super(uncompressedSize, valueCount, firstRowIndex, pageIndex, dataOwned);
         this.rowCount = rowCount;
         this.nullCount = nullCount;
         this.repetitionLevels = requireNonNull(repetitionLevels, "repetitionLevels slice is null");

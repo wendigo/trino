@@ -42,9 +42,12 @@ import io.trino.parquet.reader.decoders.PlainValueDecoders.LongDecimalPlainValue
 import io.trino.parquet.reader.decoders.PlainValueDecoders.LongPlainValueDecoder;
 import io.trino.parquet.reader.decoders.PlainValueDecoders.ShortDecimalFixedLengthByteArrayDecoder;
 import io.trino.parquet.reader.decoders.PlainValueDecoders.UuidPlainValueDecoder;
+import io.trino.parquet.reader.decoders.VarcharDecoders.CopyingVarcharDecoder;
+import io.trino.parquet.reader.decoders.VarcharDecoders.PlainVarcharDecoder;
 import io.trino.parquet.reader.flat.BinaryBuffer;
 import io.trino.parquet.reader.flat.BitBuffer;
 import io.trino.spi.TrinoException;
+import io.trino.spi.block.VariableWidthViewBuffer;
 import io.trino.spi.type.CharType;
 import io.trino.spi.type.DecimalConversions;
 import io.trino.spi.type.DecimalType;
@@ -289,6 +292,24 @@ public final class ValueDecoders
             case DELTA_BYTE_ARRAY -> new CharDeltaByteArrayDecoder((CharType) trinoType);
             default -> throw wrongEncoding(encoding);
         };
+    }
+
+    public ValueDecoder<VariableWidthViewBuffer> getVarcharDecoder(ParquetEncoding encoding)
+    {
+        return switch (encoding) {
+            case PLAIN -> new PlainVarcharDecoder();
+            default -> new CopyingVarcharDecoder(getBinaryDecoder(encoding));
+        };
+    }
+
+    public ValueDecoder<VariableWidthViewBuffer> getBoundedVarcharDecoder(ParquetEncoding encoding)
+    {
+        return new CopyingVarcharDecoder(getBoundedVarcharBinaryDecoder(encoding));
+    }
+
+    public ValueDecoder<VariableWidthViewBuffer> getFixedWidthVarcharDecoder(ParquetEncoding encoding)
+    {
+        return new CopyingVarcharDecoder(getFixedWidthBinaryDecoder(encoding));
     }
 
     public ValueDecoder<BinaryBuffer> getBinaryDecoder(ParquetEncoding encoding)

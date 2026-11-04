@@ -18,10 +18,29 @@ import io.airlift.slice.Slice;
 public abstract class Page
 {
     protected final int uncompressedSize;
+    private final boolean dataOwned;
 
     public Page(int uncompressedSize)
     {
+        this(uncompressedSize, false);
+    }
+
+    /**
+     * @param dataOwned whether the bytes of the slice belong to this page and never change, rather than to an input
+     *         buffer that is reused once the next page is read
+     */
+    public Page(int uncompressedSize, boolean dataOwned)
+    {
         this.uncompressedSize = uncompressedSize;
+        this.dataOwned = dataOwned;
+    }
+
+    /**
+     * Returns whether the bytes of the slice belong to this page and never change, so blocks may reference them.
+     */
+    public boolean isDataOwned()
+    {
+        return dataOwned;
     }
 
     public int getUncompressedSize()

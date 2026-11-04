@@ -145,15 +145,13 @@ final class TestVariableWidthViewBlockBorrowing
         blockBuilder.appendRange(source, 0, 6000);
         blockBuilder.appendRange(source, 4000, 6000);
         long retainedSize = blockBuilder.getRetainedSizeInBytes();
-        // a buffer is borrowed once
+        // a buffer is borrowed once, and a later append of a few values of the block borrows it as well
         blockBuilder.appendPositions(source, fewPositions, 0, 3);
         VariableWidthViewBlock block = blockBuilder.buildValueBlock();
-        assertThat(block.getRawBuffers()).hasNumberOfRows(2);
+        assertThat(block.getRawBuffers()).hasNumberOfRows(1);
         assertThat(block.getRawBuffers()[0]).isSameAs(sourceBuffer);
         assertThat(blockBuilder.getRetainedSizeInBytes()).isGreaterThanOrEqualTo(sizeOf(sourceBuffer));
-        // the second buffer holds the copies of the values of the last append, which references little of the buffer
-        assertThat(sizeOf(block.getRawBuffers()[1])).isLessThan(MIN_BORROWED_BUFFER_SIZE);
-        assertThat(blockBuilder.getRetainedSizeInBytes() - retainedSize).isLessThan(2 * MIN_BORROWED_BUFFER_SIZE);
+        assertThat(blockBuilder.getRetainedSizeInBytes() - retainedSize).isLessThan(MIN_BORROWED_BUFFER_SIZE);
 
         // a few values of a block are copied
         VariableWidthViewBlockBuilder copyingBuilder = new VariableWidthViewBlockBuilder(null, 1, 0);
@@ -423,56 +421,6 @@ final class TestVariableWidthViewBlockBorrowing
         VariableWidthViewBlock block = VariableWidthViewBlock.fromVariableWidthBlock(new VariableWidthBlock(3, bytes, offsets, Optional.of(valueIsValid)));
         assertBlock(block, Arrays.asList(bytes.slice(0, 21), null, bytes.slice(47, 6)));
         assertThat(block.getSizeInBytes()).isEqualTo(3 * (Integer.BYTES + Byte.BYTES) + 27);
-    }
-
-    @Test
-    public void testFromOffsetsWithChunks()
-    {
-        Random random = new Random(22);
-        List<Slice> values = randomValues(random, 5000);
-        byte[] shared = new byte[1_000_000];
-        int sharedOffset = 0;
-        List<Slice> chunks = new ArrayList<>();
-        int[] offsets = new int[values.size() + 1];
-        long[] valueIsValid = new long[Bitmap.wordsForBits(values.size())];
-        DynamicSliceOutput chunk = new DynamicSliceOutput(1024);
-        for (int i = 0; i < values.size(); i++) {
-            Slice value = values.get(i);
-            if (value != null) {
-                Bitmap.set(valueIsValid, 0, i);
-                chunk.writeBytes(value);
-            }
-            offsets[i + 1] = offsets[i] + (value == null ? 0 : value.length());
-            if (random.nextInt(50) == 0 || i == values.size() - 1) {
-                // some chunks are slices of the same array, and some are empty
-                Slice chunkSlice = chunk.slice();
-                if (random.nextBoolean()) {
-                    chunkSlice.getBytes(0, shared, sharedOffset, chunkSlice.length());
-                    chunks.add(Slices.wrappedBuffer(shared, sharedOffset, chunkSlice.length()));
-                    sharedOffset += chunkSlice.length() + 7;
-                }
-                else {
-                    chunks.add(Slices.wrappedBuffer(chunkSlice.getBytes()));
-                }
-                if (random.nextInt(10) == 0) {
-                    chunks.add(Slices.EMPTY_SLICE);
-                }
-                chunk = new DynamicSliceOutput(1024);
-            }
-        }
-        VariableWidthViewBlock block = VariableWidthViewBlock.fromOffsets(values.size(), chunks, offsets, Optional.of(valueIsValid));
-        assertBlock(block, values);
-        assertBlock(roundTrip(block), values);
-        assertThat(block.getRawBuffers().length).isGreaterThan(10);
-        assertThat(Arrays.stream(block.getRawBuffers()).filter(buffer -> buffer == shared).count()).isEqualTo(1);
-
-        // a value that spans chunks makes the chunks be copied
-        Slice joined = Slices.utf8Slice("a value that spans two chunks, short");
-        List<Slice> spanning = List.of(joined.slice(0, 10), joined.slice(10, joined.length() - 10));
-        VariableWidthViewBlock copied = VariableWidthViewBlock.fromOffsets(2, spanning, new int[] {0, 29, joined.length()}, Optional.empty());
-        assertBlock(copied, List.of(joined.slice(0, 29), joined.slice(29, joined.length() - 29)));
-        assertThatThrownBy(() -> VariableWidthViewBlock.fromOffsets(1, spanning, new int[] {0, joined.length() + 1}, Optional.empty()))
-                .isInstanceOf(IllegalArgumentException.class);
     }
 
     private VariableWidthViewBlock roundTrip(VariableWidthViewBlock block)

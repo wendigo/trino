@@ -25,7 +25,12 @@ public abstract sealed class DataPage
 
     public DataPage(int uncompressedSize, int valueCount, OptionalLong firstRowIndex, int pageIndex)
     {
-        super(uncompressedSize);
+        this(uncompressedSize, valueCount, firstRowIndex, pageIndex, false);
+    }
+
+    public DataPage(int uncompressedSize, int valueCount, OptionalLong firstRowIndex, int pageIndex, boolean dataOwned)
+    {
+        super(uncompressedSize, dataOwned);
         this.valueCount = valueCount;
         this.firstRowIndex = firstRowIndex;
         this.pageIndex = pageIndex;

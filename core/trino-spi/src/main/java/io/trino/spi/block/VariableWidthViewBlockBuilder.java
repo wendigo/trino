@@ -37,6 +37,7 @@ import static io.trino.spi.block.VariableWidthViewBlock.NO_BUFFER_LENGTHS;
 import static io.trino.spi.block.VariableWidthViewBlock.VIEW_SIZE;
 import static io.trino.spi.block.VariableWidthViewBlock.bufferIndex;
 import static io.trino.spi.block.VariableWidthViewBlock.bufferOffset;
+import static io.trino.spi.block.VariableWidthViewBlock.copyValueBytes;
 import static io.trino.spi.block.VariableWidthViewBlock.length;
 import static io.trino.spi.block.VariableWidthViewBlock.setBufferIndex;
 import static io.trino.spi.block.VariableWidthViewBlock.setBufferLocation;
@@ -61,7 +62,8 @@ import static java.util.Objects.checkIndex;
 ///
 /// Without a [BorrowedBufferTracker], the buffers of a block are borrowed only when an append references at least
 /// `1 / MAX_BORROWED_TO_REFERENCED_RATIO` of the bytes they hold, so the borrowed buffers retain at most
-/// [#MAX_BORROWED_TO_REFERENCED_RATIO] times the bytes of the values that reference them. The retained size of the
+/// [#MAX_BORROWED_TO_REFERENCED_RATIO] times the bytes of the values that reference them. Later appends of the same
+/// block borrow its buffers as well while they are borrowed, since that retains nothing more. The retained size of the
 /// builder includes the borrowed buffers. With a tracker, the buffers of every appended block are borrowed, and the
 /// tracker accounts for them instead of the builder. See [BorrowedBufferTracker].
 public class VariableWidthViewBlockBuilder
@@ -96,9 +98,12 @@ public class VariableWidthViewBlockBuilder
     private int bufferCount;
     // the buffer that values are written to, which is never a borrowed buffer
     private int currentBuffer = -1;
+    // The array and the length of the current buffer, which are kept in fields, so writing a value does not look up the
+    // buffer. The length in bufferLengths is updated when the buffers are read.
+    private byte[] writeBuffer = new byte[0];
+    private int writeOffset;
     private int lastBufferSize;
     private long ownBuffersRetainedSizeInBytes;
-    private long ownBufferBytes;
 
     // the index of each borrowed buffer in buffers
     @Nullable
@@ -108,6 +113,9 @@ public class VariableWidthViewBlockBuilder
     private long borrowedBytes;
     // maps the buffers of an appended block to buffers of this builder
     private int[] bufferMapping = new int[0];
+    // the buffers of the last block whose values were borrowed, which `bufferMapping` still maps
+    @Nullable
+    private byte[][] mappedBuffers;
 
     private boolean hasNullValue;
     private boolean hasNonNullValue;
@@ -198,7 +206,7 @@ public class VariableWidthViewBlockBuilder
         }
         else {
             int bufferOffset = reserve(length);
-            System.arraycopy(source, sourceIndex, buffers[currentBuffer], bufferOffset, length);
+            System.arraycopy(source, sourceIndex, writeBuffer, bufferOffset, length);
             writeOutOfLineView(views, view, source, sourceIndex, length, currentBuffer, bufferOffset);
             outOfLineBytes += length;
         }
@@ -269,7 +277,14 @@ public class VariableWidthViewBlockBuilder
         // null positions have empty views, so they are copied like any other value
         int firstView = positionCount * VIEW_SIZE;
         System.arraycopy(viewBlock.getRawViews(), (rawArrayBase + offset) * VIEW_SIZE, views, firstView, length * VIEW_SIZE);
-        long addedBytes = adoptValues(viewBlock, firstView, firstView + length * VIEW_SIZE);
+        long addedBytes = 0;
+        long addedOutOfLineBytes = 0;
+        for (int view = firstView; view < firstView + length * VIEW_SIZE; view += VIEW_SIZE) {
+            int valueLength = length(views, view);
+            addedBytes += valueLength;
+            addedOutOfLineBytes += valueLength > INLINE_SIZE ? valueLength : 0;
+        }
+        adoptValues(viewBlock, firstView, firstView + length * VIEW_SIZE, addedOutOfLineBytes);
         if (rawValueIsValid == null || !hasUnsetBit(rawValueIsValid, rawArrayBase + offset, length)) {
             if (valueIsValid != null) {
                 setBits(valueIsValid, 0, positionCount, length);
@@ -300,13 +315,19 @@ public class VariableWidthViewBlockBuilder
         byte[] sourceViews = viewBlock.getRawViews();
         // null positions have empty views, so they are copied like any other value
         int firstView = positionCount * VIEW_SIZE;
+        long addedBytes = 0;
+        long addedOutOfLineBytes = 0;
         for (int i = 0; i < length; i++) {
             int sourceView = (rawArrayBase + positions[offset + i]) * VIEW_SIZE;
             int view = firstView + i * VIEW_SIZE;
-            LONG_LE.set(views, view, (long) LONG_LE.get(sourceViews, sourceView));
+            long lengthAndPrefix = (long) LONG_LE.get(sourceViews, sourceView);
+            LONG_LE.set(views, view, lengthAndPrefix);
             LONG_LE.set(views, view + Long.BYTES, (long) LONG_LE.get(sourceViews, sourceView + Long.BYTES));
+            int valueLength = (int) lengthAndPrefix;
+            addedBytes += valueLength;
+            addedOutOfLineBytes += valueLength > INLINE_SIZE ? valueLength : 0;
         }
-        long addedBytes = adoptValues(viewBlock, firstView, firstView + length * VIEW_SIZE);
+        adoptValues(viewBlock, firstView, firstView + length * VIEW_SIZE, addedOutOfLineBytes);
         if (rawValueIsValid == null || !hasUnsetBit(rawValueIsValid, rawArrayBase, positions, offset, length)) {
             if (valueIsValid != null) {
                 setBits(valueIsValid, 0, positionCount, length);
@@ -378,6 +399,7 @@ public class VariableWidthViewBlockBuilder
             block = new VariableWidthViewBlock(0, positionCount, views, NO_BUFFERS, NO_BUFFER_LENGTHS, hasNullValue ? valueIsValid : null, valueBytes, outOfLineBytes);
         }
         else {
+            updateCurrentBufferLength();
             block = new VariableWidthViewBlock(
                     0,
                     positionCount,
@@ -398,6 +420,13 @@ public class VariableWidthViewBlockBuilder
     @Override
     public BlockBuilder newBlockBuilderLike(int expectedEntries, BlockBuilderStatus blockBuilderStatus)
     {
+        updateCurrentBufferLength();
+        long ownBufferBytes = 0;
+        for (int i = 0; i < bufferCount; i++) {
+            if (!bufferIsBorrowed[i]) {
+                ownBufferBytes += bufferLengths[i];
+            }
+        }
         long expectedBytes = positionCount == 0 ? 0 : ownBufferBytes * expectedEntries / positionCount;
         return new VariableWidthViewBlockBuilder(blockBuilderStatus, expectedEntries, (int) min(expectedBytes, MAX_BUFFER_SIZE), tracker);
     }
@@ -420,7 +449,7 @@ public class VariableWidthViewBlockBuilder
         if (length > INLINE_SIZE) {
             byte[] sourceBuffer = source.getRawBuffers()[(int) location];
             int bufferOffset = reserve(length);
-            System.arraycopy(sourceBuffer, (int) (location >>> Integer.SIZE), buffers[currentBuffer], bufferOffset, length);
+            copyValueBytes(sourceBuffer, (int) (location >>> Integer.SIZE), writeBuffer, bufferOffset, length);
             location = (currentBuffer & 0xFFFF_FFFFL) | ((long) bufferOffset << Integer.SIZE);
         }
         LONG_LE.set(views, view, lengthAndPrefix);
@@ -429,33 +458,31 @@ public class VariableWidthViewBlockBuilder
     }
 
     /// Points the views between `start` and `end`, which were copied from `source`, at buffers of this builder,
-    /// borrowing or copying their out-of-line values, and returns the total length of the values.
-    private long adoptValues(VariableWidthViewBlock source, int start, int end)
+    /// borrowing or copying their out-of-line values, whose total length is `addedOutOfLineBytes`.
+    private void adoptValues(VariableWidthViewBlock source, int start, int end, long addedOutOfLineBytes)
     {
-        long addedValueBytes = 0;
-        long addedOutOfLineBytes = 0;
-        for (int view = start; view < end; view += VIEW_SIZE) {
-            int length = length(views, view);
-            addedValueBytes += length;
-            if (length > INLINE_SIZE) {
-                addedOutOfLineBytes += length;
-            }
-        }
         if (addedOutOfLineBytes == 0) {
-            return addedValueBytes;
+            return;
         }
         outOfLineBytes += addedOutOfLineBytes;
 
         byte[][] sourceBuffers = source.getRawBuffers();
         int[] sourceBufferLengths = source.getRawBufferLengths();
-        boolean borrow = tracker != null || addedOutOfLineBytes * MAX_BORROWED_TO_REFERENCED_RATIO >= source.getUsedBufferBytes();
-        if (bufferMapping.length < sourceBuffers.length) {
-            bufferMapping = new int[sourceBuffers.length];
+        // Ranges of one block are often appended one after the other, like the elements of its arrays, so the mapping
+        // of its buffers is kept while they are borrowed. It is dropped when the borrowed buffers are released.
+        if (sourceBuffers != mappedBuffers) {
+            // the inline values that a buffer of a reader may also hold are not counted, since copying them is not avoided
+            boolean borrow = tracker != null ||
+                    addedOutOfLineBytes * MAX_BORROWED_TO_REFERENCED_RATIO >= source.getUsedBufferBytes() - source.getInlineBytes();
+            if (bufferMapping.length < sourceBuffers.length) {
+                bufferMapping = new int[sourceBuffers.length];
+            }
+            for (int i = 0; i < sourceBuffers.length; i++) {
+                bufferMapping[i] = borrow && sourceBuffers[i].length >= MIN_BORROWED_BUFFER_SIZE ? NOT_BORROWED_YET : COPIED;
+            }
+            mappedBuffers = borrow ? sourceBuffers : null;
         }
         int[] mapping = bufferMapping;
-        for (int i = 0; i < sourceBuffers.length; i++) {
-            mapping[i] = borrow && sourceBuffers[i].length >= MIN_BORROWED_BUFFER_SIZE ? NOT_BORROWED_YET : COPIED;
-        }
 
         long addedBorrowedBytes = 0;
         for (int view = start; view < end; view += VIEW_SIZE) {
@@ -471,7 +498,7 @@ public class VariableWidthViewBlockBuilder
             }
             if (index == COPIED) {
                 int bufferOffset = reserve(length);
-                System.arraycopy(sourceBuffers[sourceIndex], bufferOffset(views, view), buffers[currentBuffer], bufferOffset, length);
+                copyValueBytes(sourceBuffers[sourceIndex], bufferOffset(views, view), writeBuffer, bufferOffset, length);
                 setBufferLocation(views, view, currentBuffer, bufferOffset);
             }
             else {
@@ -485,7 +512,6 @@ public class VariableWidthViewBlockBuilder
                 tracker.addReferencedBytes(addedBorrowedBytes);
             }
         }
-        return addedValueBytes;
     }
 
     /// Adds `buffer` to the buffers of this builder unless it is already borrowed, and returns its index.
@@ -540,6 +566,7 @@ public class VariableWidthViewBlockBuilder
         borrowedBufferIndexes = null;
         borrowedBuffersRetainedSizeInBytes = 0;
         borrowedBytes = 0;
+        mappedBuffers = null;
     }
 
     /// Copies the values in borrowed buffers to buffers of this builder and releases the borrowed buffers.
@@ -548,6 +575,7 @@ public class VariableWidthViewBlockBuilder
         if (borrowedBufferIndexes == null) {
             return;
         }
+        updateCurrentBufferLength();
         byte[][] oldBuffers = buffers;
         int[] oldBufferLengths = bufferLengths;
         boolean[] oldBufferIsBorrowed = bufferIsBorrowed;
@@ -575,7 +603,7 @@ public class VariableWidthViewBlockBuilder
             int newIndex = newIndexes[oldIndex];
             if (newIndex == COPIED) {
                 int bufferOffset = reserve(length);
-                System.arraycopy(oldBuffers[oldIndex], bufferOffset(views, view), buffers[currentBuffer], bufferOffset, length);
+                System.arraycopy(oldBuffers[oldIndex], bufferOffset(views, view), writeBuffer, bufferOffset, length);
                 setBufferLocation(views, view, currentBuffer, bufferOffset);
             }
             else {
@@ -612,13 +640,20 @@ public class VariableWidthViewBlockBuilder
     /// Reserves `length` bytes at the end of the current buffer and returns the offset of the reserved bytes.
     private int reserve(int length)
     {
-        if (currentBuffer < 0 || buffers[currentBuffer].length - bufferLengths[currentBuffer] < length) {
+        int bufferOffset = writeOffset;
+        if (writeBuffer.length - bufferOffset < length) {
             newBuffer(length);
+            bufferOffset = 0;
         }
-        int bufferOffset = bufferLengths[currentBuffer];
-        bufferLengths[currentBuffer] += length;
-        ownBufferBytes += length;
+        writeOffset = bufferOffset + length;
         return bufferOffset;
+    }
+
+    private void updateCurrentBufferLength()
+    {
+        if (currentBuffer >= 0) {
+            bufferLengths[currentBuffer] = writeOffset;
+        }
     }
 
     private void newBuffer(int minimumSize)
@@ -629,8 +664,11 @@ public class VariableWidthViewBlockBuilder
             throw new IllegalArgumentException("Value is too large: " + minimumSize);
         }
         lastBufferSize = size;
-        currentBuffer = addBuffer(new byte[size], 0, false);
-        ownBuffersRetainedSizeInBytes += sizeOf(buffers[currentBuffer]);
+        updateCurrentBufferLength();
+        writeBuffer = new byte[size];
+        writeOffset = 0;
+        currentBuffer = addBuffer(writeBuffer, 0, false);
+        ownBuffersRetainedSizeInBytes += sizeOf(writeBuffer);
     }
 
     private int addBuffer(byte[] buffer, int length, boolean borrowed)

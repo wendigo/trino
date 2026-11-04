@@ -216,6 +216,14 @@ public class BenchmarkVariableWidthViewBlock
         VIEW,
     }
 
+    /// How the view blocks that the benchmarks read are created: written one value at a time to a builder without a
+    /// size hint, or wrapped around the contiguous value bytes of a reader.
+    public enum DataLayout
+    {
+        BUILT,
+        READER,
+    }
+
     public enum Values
     {
         /// all values are stored inline in the view
@@ -264,6 +272,9 @@ public class BenchmarkVariableWidthViewBlock
         @Param
         private Values valueShape = Values.MIXED_0_TO_64;
 
+        @Param
+        private DataLayout dataLayout = DataLayout.BUILT;
+
         private Slice[] values;
         private int totalBytes;
         private VariableWidthBlock variableWidthBlock;
@@ -293,8 +304,14 @@ public class BenchmarkVariableWidthViewBlock
 
             variableWidthBlock = buildVariableWidthBlock(values);
             otherVariableWidthBlock = buildVariableWidthBlock(copy(values));
-            viewBlock = buildViewBlock(values);
-            otherViewBlock = buildViewBlock(copy(values));
+            if (dataLayout == DataLayout.READER) {
+                viewBlock = wrapReaderBytes(variableWidthBlock);
+                otherViewBlock = wrapReaderBytes(otherVariableWidthBlock);
+            }
+            else {
+                viewBlock = buildViewBlock(values);
+                otherViewBlock = buildViewBlock(copy(values));
+            }
 
             selectedPositions = random.ints(SELECTED_POSITIONS, 0, POSITIONS).toArray();
 
@@ -323,6 +340,11 @@ public class BenchmarkVariableWidthViewBlock
                 builder.writeEntry(value);
             }
             return builder.buildValueBlock();
+        }
+
+        private static VariableWidthViewBlock wrapReaderBytes(VariableWidthBlock block)
+        {
+            return VariableWidthViewBlock.fromOffsets(block.getPositionCount(), block.getRawSlice(), block.getRawOffsets(), Optional.empty());
         }
 
         private static VariableWidthViewBlock buildViewBlock(Slice[] values)

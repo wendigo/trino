@@ -110,7 +110,7 @@ public abstract class AbstractColumnReader<BufferType>
         return produceDictionaryBlock;
     }
 
-    protected ValueDecoder<BufferType> createValueDecoder(ValueDecodersProvider<BufferType> decodersProvider, ParquetEncoding encoding, Slice data)
+    protected ValueDecoder<BufferType> createValueDecoder(ValueDecodersProvider<BufferType> decodersProvider, ParquetEncoding encoding, Slice data, boolean dataOwned)
     {
         ValueDecoder<BufferType> valueDecoder;
         if (encoding == PLAIN_DICTIONARY || encoding == RLE_DICTIONARY) {
@@ -122,7 +122,7 @@ public abstract class AbstractColumnReader<BufferType>
         else {
             valueDecoder = decodersProvider.create(encoding);
         }
-        valueDecoder.init(new SimpleSliceInputStream(data));
+        valueDecoder.init(new SimpleSliceInputStream(data, 0, dataOwned));
         return valueDecoder;
     }
 

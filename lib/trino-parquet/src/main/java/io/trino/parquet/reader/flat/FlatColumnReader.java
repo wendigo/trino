@@ -569,14 +569,14 @@ public class FlatColumnReader<BufferType>
             }
         }
 
-        valueDecoder = createValueDecoder(decodersProvider, page.getValueEncoding(), buffer.slice(alreadyRead, buffer.length() - alreadyRead));
+        valueDecoder = createValueDecoder(decodersProvider, page.getValueEncoding(), buffer.slice(alreadyRead, buffer.length() - alreadyRead), page.isDataOwned());
     }
 
     private void readFlatPageV2(DataPageV2 page)
     {
         definitionLevelDecoder = definitionLevelDecoderProvider.create(field.getDescriptor().getMaxDefinitionLevel());
         definitionLevelDecoder.init(page.getDefinitionLevels());
-        valueDecoder = createValueDecoder(decodersProvider, page.getDataEncoding(), page.getSlice());
+        valueDecoder = createValueDecoder(decodersProvider, page.getDataEncoding(), page.getSlice(), page.isDataOwned());
     }
 
     private NonNullValuesBuffer<BufferType> createNonNullValuesBuffer(int batchSize)

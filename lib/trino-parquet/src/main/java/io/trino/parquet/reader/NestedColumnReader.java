@@ -546,7 +546,7 @@ public class NestedColumnReader<BufferType>
             buffer = buffer.slice(bufferSize + Integer.BYTES, buffer.length() - bufferSize - Integer.BYTES);
         }
 
-        valueDecoder = createValueDecoder(decodersProvider, page.getValueEncoding(), buffer);
+        valueDecoder = createValueDecoder(decodersProvider, page.getValueEncoding(), buffer, page.isDataOwned());
     }
 
     private void readFlatPageV2(DataPageV2 page)
@@ -560,7 +560,7 @@ public class NestedColumnReader<BufferType>
         repetitionLevelDecoder = levelsDecoderProvider.create(maxRepetitionLevel);
         repetitionLevelDecoder.init(new SimpleSliceInputStream(page.getRepetitionLevels()));
 
-        valueDecoder = createValueDecoder(decodersProvider, page.getDataEncoding(), page.getSlice());
+        valueDecoder = createValueDecoder(decodersProvider, page.getDataEncoding(), page.getSlice(), page.isDataOwned());
     }
 
     /**

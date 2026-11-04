@@ -28,6 +28,7 @@ import static java.util.Objects.requireNonNull;
 public final class SimpleSliceInputStream
 {
     private final Slice slice;
+    private final boolean dataOwned;
     private int offset;
 
     public SimpleSliceInputStream(Slice slice)
@@ -37,8 +38,22 @@ public final class SimpleSliceInputStream
 
     public SimpleSliceInputStream(Slice slice, int offset)
     {
+        this(slice, offset, false);
+    }
+
+    /**
+     * @param dataOwned whether the bytes of the slice never change, so decoded values may reference them
+     */
+    public SimpleSliceInputStream(Slice slice, int offset, boolean dataOwned)
+    {
         this.slice = requireNonNull(slice, "slice is null");
         this.offset = offset;
+        this.dataOwned = dataOwned;
+    }
+
+    public boolean isDataOwned()
+    {
+        return dataOwned;
     }
 
     public byte readByte()
