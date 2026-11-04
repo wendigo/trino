@@ -235,20 +235,20 @@ public class TestPagesSerde
         // empty page
         Page page = new Page(builder.build());
         int pageSize = serializedSize(ImmutableList.of(VARCHAR), page);
-        assertThat(pageSize).isEqualTo(64);
+        assertThat(pageSize).isEqualTo(48);
 
         // page with one value
         VARCHAR.writeString(builder, "alice");
-        pageSize = 64; // Now we have moved to the normal block implementation so the page size overhead is 64
+        pageSize = 48; // Now we have moved to the normal block implementation so the page size overhead is 48
         page = new Page(builder.build());
         int firstValueSize = serializedSize(ImmutableList.of(VARCHAR), page) - pageSize;
-        assertThat(firstValueSize).isEqualTo(16); // view with "alice" stored inline
+        assertThat(firstValueSize).isEqualTo(4 + 5); // length + "alice"
 
         // page with two values
         VARCHAR.writeString(builder, "bob");
         page = new Page(builder.build());
         int secondValueSize = serializedSize(ImmutableList.of(VARCHAR), page) - (pageSize + firstValueSize);
-        assertThat(secondValueSize).isEqualTo(16); // view with "bob" stored inline (null shared with first entry)
+        assertThat(secondValueSize).isEqualTo(4 + 3); // length + "bob" (null shared with first entry)
     }
 
     private int serializedSize(List<Type> types, Page expectedPage)

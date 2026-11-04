@@ -15,36 +15,37 @@ package io.trino.spi.block;
 
 import io.airlift.slice.SliceInput;
 import io.airlift.slice.SliceOutput;
+import io.airlift.slice.Slices;
+
+import java.util.Optional;
 
 import static io.trino.spi.block.EncoderUtil.decodeValidityAsLongs;
 import static io.trino.spi.block.EncoderUtil.encodeValidityAsLongs;
 import static io.trino.spi.block.EncoderUtil.encodedValiditySize;
 import static io.trino.spi.block.VariableWidthViewBlock.INLINE_SIZE;
 import static io.trino.spi.block.VariableWidthViewBlock.LONG_LE;
-import static io.trino.spi.block.VariableWidthViewBlock.MAX_UNREFERENCED_BYTES_DIVISOR;
-import static io.trino.spi.block.VariableWidthViewBlock.NO_BUFFERS;
 import static io.trino.spi.block.VariableWidthViewBlock.VIEW_SIZE;
 import static io.trino.spi.block.VariableWidthViewBlock.bufferIndex;
 import static io.trino.spi.block.VariableWidthViewBlock.bufferOffset;
 import static io.trino.spi.block.VariableWidthViewBlock.length;
 import static java.lang.Math.toIntExact;
+import static java.lang.System.arraycopy;
 
-/// Serializes [VariableWidthViewBlock] in its in-memory layout, like the variadic buffers of the Arrow `BinaryView`
-/// IPC format: validity, the total length of the values and of the out-of-line values, the buffer count and lengths, the
-/// views, and the buffers. Reading a block copies the views and buffers without looking at the values.
-///
-/// Each buffer is written up to the end of the bytes that views of the block may reference, which the block knows, so
-/// a block with dense buffers is written without looking at its views. A block whose buffers would hold many bytes
-/// that its views do not reference, such as a region in the middle of a larger block or a block that borrows a few
-/// values of many other blocks, is compacted while it is written, so its views reference a single buffer that holds only
-/// their values.
+/// Serializes [VariableWidthViewBlock] like [VariableWidthBlockEncoding] serializes [VariableWidthBlock]: the
+/// validity, the length of every value, and the value bytes in position order. The views are not written, since they
+/// hold 16 bytes per position and mostly zeros, which would triple the size of short values on the wire and the work
+/// of compressing them; reading rebuilds the views from the lengths with [VariableWidthViewBlock#fromLengths], which
+/// is vectorized. Null positions have a length of zero, which is written too, so the lengths are read without a branch.
 public class VariableWidthViewBlockEncoding
         implements BlockEncoding
 {
     public static final String NAME = "VARIABLE_WIDTH_VIEW";
 
     private static final int SCRATCH_SIZE = 4096;
-    private static final int MAX_GATHERED_RUN_LENGTH = 256;
+    // the longest value gathered in the scratch buffer rather than written from its buffer
+    private static final int MAX_GATHERED_LENGTH = 256;
+    // gathered values are copied in words of this many bytes
+    private static final int COPIED_WORD = 2 * Long.BYTES;
 
     @Override
     public String getName()
@@ -69,45 +70,22 @@ public class VariableWidthViewBlockEncoding
         int arrayBase = viewBlock.getRawArrayBase();
         encodeValidityAsLongs(sliceOutput, viewBlock.getRawValueIsValid(), arrayBase, positionCount);
 
-        // the sizes of the values, which the reader would otherwise compute from the views
-        long valueBytes = viewBlock.getValueBytes();
-        long outOfLineBytes = viewBlock.getOutOfLineBytes();
-        sliceOutput.appendLong(valueBytes);
-        sliceOutput.appendLong(outOfLineBytes);
-
         byte[] views = viewBlock.getRawViews();
-        byte[][] buffers = viewBlock.getRawBuffers();
         int start = arrayBase * VIEW_SIZE;
         int end = start + positionCount * VIEW_SIZE;
 
-        if (outOfLineBytes == 0) {
-            // only inline values, which have no buffer location to update
-            sliceOutput.appendInt(0);
-            sliceOutput.writeBytes(views, start, end - start);
-            return;
+        // the view of a null position is all zeros, so its length is zero
+        int[] lengths = new int[positionCount];
+        long totalLength = 0;
+        for (int position = 0; position < positionCount; position++) {
+            int length = length(views, start + position * VIEW_SIZE);
+            lengths[position] = length;
+            totalLength += length;
         }
+        sliceOutput.appendInt(toIntExact(totalLength));
+        sliceOutput.writeInts(lengths, 0, positionCount);
 
-        // Only the bytes of a buffer that views of the block may reference are written, so the views stay valid and
-        // the unused end of the last buffer of a builder is not written. A value repeated by a builder is counted once
-        // for every view, so the block is not compacted, which would copy the value for every view.
-        if (viewBlock.getUsedBufferBytes() - outOfLineBytes <= outOfLineBytes / MAX_UNREFERENCED_BYTES_DIVISOR) {
-            int[] bufferLengths = viewBlock.getRawBufferLengths();
-            sliceOutput.appendInt(buffers.length);
-            for (int bufferLength : bufferLengths) {
-                sliceOutput.appendInt(bufferLength);
-            }
-            sliceOutput.writeBytes(views, start, end - start);
-            for (int i = 0; i < buffers.length; i++) {
-                sliceOutput.writeBytes(buffers[i], 0, bufferLengths[i]);
-            }
-            return;
-        }
-
-        sliceOutput.appendInt(1);
-        sliceOutput.appendInt(toIntExact(outOfLineBytes));
-        byte[] scratch = new byte[Math.min(end - start, SCRATCH_SIZE)];
-        writeCompactedViews(sliceOutput, views, start, end, scratch);
-        writeReferencedBytes(sliceOutput, views, start, end, buffers, scratch);
+        writeValues(sliceOutput, views, start, end, viewBlock.getRawBuffers());
     }
 
     @Override
@@ -115,13 +93,11 @@ public class VariableWidthViewBlockEncoding
     {
         VariableWidthViewBlock viewBlock = (VariableWidthViewBlock) block;
         int positionCount = viewBlock.getPositionCount();
-        // a value that several views share is written once, so no more than the buffers hold is written
         return Integer.BYTES
                 + encodedValiditySize(viewBlock.getRawValueIsValid(), positionCount)
-                + Long.BYTES * 2L
-                + Integer.BYTES * (1L + viewBlock.getRawBuffers().length)
-                + VIEW_SIZE * (long) positionCount
-                + Math.min(viewBlock.getOutOfLineBytes(), viewBlock.getUsedBufferBytes());
+                + Integer.BYTES
+                + Integer.BYTES * (long) positionCount
+                + viewBlock.getValueBytes();
     }
 
     @Override
@@ -129,101 +105,68 @@ public class VariableWidthViewBlockEncoding
     {
         int positionCount = sliceInput.readInt();
         long[] valueIsValid = decodeValidityAsLongs(sliceInput, positionCount);
-        long valueBytes = sliceInput.readLong();
-        long outOfLineBytes = sliceInput.readLong();
-        if (outOfLineBytes < 0 || valueBytes < outOfLineBytes) {
-            throw new IllegalArgumentException("Invalid value sizes");
+        int totalLength = sliceInput.readInt();
+        if (totalLength < 0) {
+            throw new IllegalArgumentException("totalLength is negative");
         }
-
-        int bufferCount = sliceInput.readInt();
-        if (bufferCount < 0) {
-            throw new IllegalArgumentException("bufferCount is negative");
-        }
-        byte[][] buffers = bufferCount == 0 ? NO_BUFFERS : new byte[bufferCount][];
-        for (int i = 0; i < bufferCount; i++) {
-            buffers[i] = new byte[sliceInput.readInt()];
-        }
-
-        byte[] views = new byte[Math.multiplyExact(positionCount, VIEW_SIZE)];
-        sliceInput.readBytes(views);
-        for (byte[] buffer : buffers) {
-            sliceInput.readBytes(buffer);
-        }
-        return new VariableWidthViewBlock(0, positionCount, views, buffers, null, valueIsValid, valueBytes, outOfLineBytes);
+        int[] lengths = new int[positionCount];
+        sliceInput.readInts(lengths, 0, positionCount);
+        byte[] bytes = new byte[totalLength];
+        sliceInput.readBytes(bytes, 0, totalLength);
+        return VariableWidthViewBlock.fromLengths(positionCount, Slices.wrappedBuffer(bytes), lengths, Optional.ofNullable(valueIsValid));
     }
 
-    /// Writes the views, pointing the views of out-of-line values at consecutive offsets of a single buffer.
-    private static void writeCompactedViews(SliceOutput sliceOutput, byte[] views, int start, int end, byte[] scratch)
+    /// Writes the value bytes in position order. Inline values are copied from their views, and short out-of-line
+    /// values from their buffers, to a scratch buffer that is written when it fills up; longer values are written
+    /// from their buffers.
+    private static void writeValues(SliceOutput sliceOutput, byte[] views, int start, int end, byte[][] buffers)
     {
+        // Values are copied in words, past their length, which is faster than a copy of an arbitrary length, so the
+        // scratch buffer has room for a word after the longest gathered value. An inline value is copied with two
+        // overlapping long stores of its 12 inline view bytes.
+        byte[] scratch = new byte[SCRATCH_SIZE + COPIED_WORD];
         int scratchLength = 0;
-        int newOffset = 0;
-        for (int view = start; view < end; view += VIEW_SIZE) {
-            long lengthAndPrefix = (long) LONG_LE.get(views, view);
-            long rest = (long) LONG_LE.get(views, view + Long.BYTES);
-            int length = (int) lengthAndPrefix;
-            if (length > INLINE_SIZE) {
-                rest = (long) newOffset << Integer.SIZE;
-                newOffset += length;
-            }
-            LONG_LE.set(scratch, scratchLength, lengthAndPrefix);
-            LONG_LE.set(scratch, scratchLength + Long.BYTES, rest);
-            scratchLength += VIEW_SIZE;
-            if (scratchLength == scratch.length) {
-                sliceOutput.writeBytes(scratch, 0, scratchLength);
-                scratchLength = 0;
-            }
-        }
-        if (scratchLength > 0) {
-            sliceOutput.writeBytes(scratch, 0, scratchLength);
-        }
-    }
-
-    /// Writes the out-of-line values in view order. Values that are adjacent in a buffer are written together, and
-    /// short runs are gathered in `scratch`.
-    private static void writeReferencedBytes(SliceOutput sliceOutput, byte[] views, int start, int end, byte[][] buffers, byte[] scratch)
-    {
-        int scratchLength = 0;
-        byte[] run = null;
-        int runStart = 0;
-        int runEnd = 0;
         for (int view = start; view < end; view += VIEW_SIZE) {
             int length = length(views, view);
             if (length <= INLINE_SIZE) {
+                if (scratchLength > SCRATCH_SIZE - INLINE_SIZE) {
+                    sliceOutput.writeBytes(scratch, 0, scratchLength);
+                    scratchLength = 0;
+                }
+                // the inline bytes follow the length; unused view bytes are zero
+                LONG_LE.set(scratch, scratchLength, (long) LONG_LE.get(views, view + Integer.BYTES));
+                LONG_LE.set(scratch, scratchLength + Integer.BYTES, (long) LONG_LE.get(views, view + Long.BYTES));
+                scratchLength += length;
                 continue;
             }
             byte[] buffer = buffers[bufferIndex(views, view)];
             int offset = bufferOffset(views, view);
-            if (buffer == run && offset == runEnd) {
-                runEnd += length;
+            if (length <= MAX_GATHERED_LENGTH) {
+                if (scratchLength + length > SCRATCH_SIZE) {
+                    sliceOutput.writeBytes(scratch, 0, scratchLength);
+                    scratchLength = 0;
+                }
+                if (offset <= buffer.length - length - COPIED_WORD) {
+                    for (int copied = 0; copied < length; copied += COPIED_WORD) {
+                        LONG_LE.set(scratch, scratchLength + copied, (long) LONG_LE.get(buffer, offset + copied));
+                        LONG_LE.set(scratch, scratchLength + copied + Long.BYTES, (long) LONG_LE.get(buffer, offset + copied + Long.BYTES));
+                    }
+                }
+                else {
+                    // the value ends near the end of its buffer
+                    arraycopy(buffer, offset, scratch, scratchLength, length);
+                }
+                scratchLength += length;
                 continue;
             }
-            if (run != null) {
-                scratchLength = writeRun(sliceOutput, run, runStart, runEnd - runStart, scratch, scratchLength);
-            }
-            run = buffer;
-            runStart = offset;
-            runEnd = offset + length;
-        }
-        scratchLength = writeRun(sliceOutput, run, runStart, runEnd - runStart, scratch, scratchLength);
-        if (scratchLength > 0) {
-            sliceOutput.writeBytes(scratch, 0, scratchLength);
-        }
-    }
-
-    private static int writeRun(SliceOutput sliceOutput, byte[] run, int runStart, int runLength, byte[] scratch, int scratchLength)
-    {
-        if (runLength <= MAX_GATHERED_RUN_LENGTH && runLength <= scratch.length) {
-            if (scratchLength + runLength > scratch.length) {
+            if (scratchLength > 0) {
                 sliceOutput.writeBytes(scratch, 0, scratchLength);
                 scratchLength = 0;
             }
-            System.arraycopy(run, runStart, scratch, scratchLength, runLength);
-            return scratchLength + runLength;
+            sliceOutput.writeBytes(buffer, offset, length);
         }
         if (scratchLength > 0) {
             sliceOutput.writeBytes(scratch, 0, scratchLength);
         }
-        sliceOutput.writeBytes(run, runStart, runLength);
-        return 0;
     }
 }

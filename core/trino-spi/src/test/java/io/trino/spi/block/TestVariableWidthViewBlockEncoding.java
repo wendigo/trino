@@ -19,7 +19,6 @@ import io.airlift.slice.Slices;
 import io.trino.spi.type.Type;
 import org.junit.jupiter.api.Test;
 
-import java.util.Arrays;
 import java.util.List;
 import java.util.Optional;
 import java.util.Random;
@@ -103,7 +102,7 @@ final class TestVariableWidthViewBlockEncoding
     }
 
     @Test
-    public void testSparseBlocksAreCompacted()
+    public void testOnlyTheValuesOfARegionAreWritten()
     {
         Slice longValue = utf8Slice("x".repeat(1000));
         VariableWidthViewBlockBuilder blockBuilder = new VariableWidthViewBlockBuilder(null, 1, 0);
@@ -113,21 +112,15 @@ final class TestVariableWidthViewBlockEncoding
         }
         VariableWidthViewBlock block = blockBuilder.buildValueBlock();
 
-        // a region references a small part of the buffers, so only its values are written, to a single buffer
+        // a region references a small part of the buffers, and only its values are written
         VariableWidthViewBlock region = block.getRegion(1001, 10);
+        assertThat(serializedSize(region)).isEqualTo(headerSize(region) + 5 * longValue.length() + 5 * 5);
         VariableWidthViewBlock actual = assertRoundTrip(region);
         assertThat(actual.getRawBuffers()).hasNumberOfRows(1);
-        assertThat(actual.getRawBuffers()[0]).hasSize(5 * longValue.length());
-        assertThat(serializedSize(region)).isLessThan(6 * longValue.length());
+        assertThat(actual.getRawBuffers()[0]).hasSize(5 * longValue.length() + 5 * 5);
 
         VariableWidthViewBlock inlineRegion = block.copyPositions(new int[] {1, 3, 5}, 0, 3);
-        assertThat(assertRoundTrip(inlineRegion.getRegion(1, 2)).getRawBuffers()).isEmpty();
-
-        // the deserialized block is dense, so it is written as it is
-        VariableWidthViewBlock dense = assertRoundTrip(block.copyRegion(0, block.getPositionCount()));
-        VariableWidthViewBlock denseCopy = assertRoundTrip(dense);
-        assertThat(denseCopy.getRawBuffers()).hasNumberOfRows(dense.getRawBuffers().length);
-        assertThat(denseCopy.getRawViews()).isEqualTo(dense.getRawViews());
+        assertThat(serializedSize(inlineRegion)).isEqualTo(headerSize(inlineRegion) + 3 * 5);
     }
 
     @Test
@@ -146,19 +139,37 @@ final class TestVariableWidthViewBlockEncoding
         }
         assertThat(bufferBytes).isGreaterThan(3000L * value.length() * 9 / 8);
 
+        assertThat(serializedSize(block)).isEqualTo(headerSize(block) + 3000L * value.length());
         VariableWidthViewBlock actual = assertRoundTrip(block);
-        // the buffers are written without being compacted, up to the end of their last value
-        assertThat(actual.getRawBuffers()).hasNumberOfRows(block.getRawBuffers().length);
-        assertThat(actual.getRawViews()).isEqualTo(Arrays.copyOf(block.getRawViews(), 3000 * VariableWidthViewBlock.VIEW_SIZE));
-        long actualBufferBytes = 0;
-        for (byte[] buffer : actual.getRawBuffers()) {
-            actualBufferBytes += buffer.length;
-        }
-        assertThat(actualBufferBytes).isLessThan(3000L * value.length() * 9 / 8);
+        assertThat(actual.getRawBuffers()).hasNumberOfRows(1);
+        assertThat(actual.getRawBuffers()[0]).hasSize(3000 * value.length());
     }
 
     @Test
-    public void testRepeatedValuesStayShared()
+    public void testNullsAndInlineValuesAreWrittenCompactly()
+    {
+        VariableWidthViewBlockBuilder blockBuilder = new VariableWidthViewBlockBuilder(null, 1, 0);
+        for (int i = 0; i < 1000; i++) {
+            if (i % 3 == 0) {
+                blockBuilder.appendNull();
+            }
+            else {
+                blockBuilder.writeEntry(utf8Slice("v" + i));
+            }
+        }
+        VariableWidthViewBlock block = blockBuilder.buildValueBlock();
+
+        // a null costs its length, and an inline value its bytes; the views are not written
+        assertThat(serializedSize(block)).isEqualTo(headerSize(block) + block.getValueBytes());
+        assertThat(serializedSize(block)).isLessThan(1000L * VariableWidthViewBlock.VIEW_SIZE);
+        // the values are inline, so the read block does not reference the bytes it was read from
+        VariableWidthViewBlock actual = assertRoundTrip(block);
+        assertThat(actual.getRawBuffers()).isEmpty();
+        assertThat(actual.mayHaveNull()).isTrue();
+    }
+
+    @Test
+    public void testRepeatedValuesAreWrittenForEveryPosition()
     {
         VariableWidthViewBlockBuilder source = new VariableWidthViewBlockBuilder(null, 1, 0);
         source.writeEntry(utf8Slice("y".repeat(10_000)));
@@ -166,7 +177,8 @@ final class TestVariableWidthViewBlockEncoding
         blockBuilder.appendRepeated(source.buildValueBlock(), 0, 1000);
         VariableWidthViewBlock block = blockBuilder.buildValueBlock();
 
-        assertThat(serializedSize(block)).isLessThan(1000 * VariableWidthViewBlock.VIEW_SIZE + 20_000);
+        // like a variable-width block, the encoding does not share values, which a run-length encoded block does
+        assertThat(serializedSize(block)).isEqualTo(headerSize(block) + 1000L * 10_000);
         assertRoundTrip(block);
     }
 
@@ -209,10 +221,24 @@ final class TestVariableWidthViewBlockEncoding
         long estimate = blockEncodingSerde.estimatedWriteSize(block);
         DynamicSliceOutput output = new DynamicSliceOutput(1024);
         blockEncodingSerde.writeBlock(output, block);
-        // buffers are written with at most 1/8 of unreferenced bytes, and the estimate counts a length for every
-        // buffer, also when a block is compacted to a single buffer; a dictionary scales the estimate of its
-        // dictionary, including the fixed size of the header
-        assertThat((long) output.size()).isBetween(estimate * 8 / 9 - 64, estimate * 9 / 8 + 32);
+        if (block instanceof VariableWidthViewBlock) {
+            assertThat((long) output.size()).isEqualTo(estimate);
+        }
+        else {
+            // a dictionary scales the estimate of its dictionary, including the fixed size of the header
+            assertThat((long) output.size()).isBetween(estimate * 8 / 9 - 64, estimate * 9 / 8 + 32);
+        }
+    }
+
+    /// The size of everything but the value bytes: the encoding name, position count, validity, total length and
+    /// the lengths.
+    private static long headerSize(VariableWidthViewBlock block)
+    {
+        return Integer.BYTES + VariableWidthViewBlockEncoding.NAME.length()
+                + Integer.BYTES
+                + EncoderUtil.encodedValiditySize(block.getRawValueIsValid(), block.getPositionCount())
+                + Integer.BYTES
+                + Integer.BYTES * (long) block.getPositionCount();
     }
 
     private long serializedSize(VariableWidthViewBlock block)
