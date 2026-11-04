@@ -338,37 +338,56 @@ final class ReaderUtils
         return result;
     }
 
+    /// Expands the lengths of the non-null positions, which `values` holds first, to all positions in place, with a
+    /// length of zero at every null position. The positions are written from the last one, so no unread length is
+    /// overwritten.
     public static void unpackLengthNulls(int[] values, long[] valueIsValid, int positionCount, int nonNullCount)
     {
-        int nullSuppressedPosition = nonNullCount - 1;
+        int inputPosition = nonNullCount;
         int outputPosition = positionCount;
         while (outputPosition > 0) {
             int bitsInWord = min(Long.SIZE, outputPosition);
             int wordStart = outputPosition - bitsInWord;
             long validBits = getBits(valueIsValid, 0, wordStart, bitsInWord);
+            outputPosition = wordStart;
             if (validBits == 0) {
-                Arrays.fill(values, wordStart, outputPosition, 0);
-                outputPosition = wordStart;
+                Arrays.fill(values, wordStart, wordStart + bitsInWord, 0);
                 continue;
             }
             if (bitCount(validBits) == bitsInWord) {
-                int sourcePosition = nullSuppressedPosition - bitsInWord + 1;
-                arraycopy(values, sourcePosition, values, wordStart, bitsInWord);
-                nullSuppressedPosition -= bitsInWord;
-                outputPosition = wordStart;
+                inputPosition -= bitsInWord;
+                arraycopy(values, inputPosition, values, wordStart, bitsInWord);
+                continue;
+            }
+            if (countTransitions(validBits, bitsInWord) >= RANDOM_TRANSITION_THRESHOLD) {
+                // Nulls that are scattered make a branch on the validity bit mispredict, so every position takes the
+                // next unread length, masked to zero at a null position, which is read again at the next position.
+                for (int position = bitsInWord - 1; position >= 0; position--) {
+                    int valid = (int) ((validBits >>> position) & 1);
+                    inputPosition -= valid;
+                    values[wordStart + position] = values[max(inputPosition, 0)] & -valid;
+                }
                 continue;
             }
 
-            for (int position = bitsInWord - 1; position >= 0; position--) {
-                if ((validBits & (1L << position)) != 0) {
-                    values[wordStart + position] = values[nullSuppressedPosition];
-                    nullSuppressedPosition--;
+            // the last position is in the top bit, so the runs are found from the end with leading zero counts
+            long bits = validBits << (Long.SIZE - bitsInWord);
+            int remaining = bitsInWord;
+            while (remaining > 0) {
+                int nullCount = min(Long.numberOfLeadingZeros(bits), remaining);
+                remaining -= nullCount;
+                Arrays.fill(values, wordStart + remaining, wordStart + remaining + nullCount, 0);
+                if (remaining == 0) {
+                    break;
                 }
-                else {
-                    values[wordStart + position] = 0;
-                }
+                bits <<= nullCount;
+
+                int validCount = min(Long.numberOfLeadingZeros(~bits), remaining);
+                remaining -= validCount;
+                inputPosition -= validCount;
+                arraycopy(values, inputPosition, values, wordStart + remaining, validCount);
+                bits <<= validCount;
             }
-            outputPosition = wordStart;
         }
     }
 
