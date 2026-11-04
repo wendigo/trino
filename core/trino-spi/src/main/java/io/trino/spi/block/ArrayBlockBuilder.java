@@ -25,6 +25,7 @@ import static io.trino.spi.block.Bitmap.clear;
 import static io.trino.spi.block.Bitmap.copyBits;
 import static io.trino.spi.block.Bitmap.hasSetBit;
 import static io.trino.spi.block.Bitmap.hasUnsetBit;
+import static io.trino.spi.block.Bitmap.isSet;
 import static io.trino.spi.block.Bitmap.set;
 import static io.trino.spi.block.Bitmap.setBits;
 import static io.trino.spi.block.BlockUtil.calculateNewArraySize;
@@ -246,8 +247,75 @@ public class ArrayBlockBuilder
         if (currentEntryOpened) {
             throw new IllegalStateException("Current entry must be closed before a null can be written");
         }
+        if (length == 0) {
+            return;
+        }
+        ensureCapacity(positionCount + length);
+
+        ArrayBlock arrayBlock = (ArrayBlock) block;
+        int rawOffsetBase = arrayBlock.getOffsetBase();
+        int[] rawOffsets = arrayBlock.getRawOffsets();
+        long[] rawValueIsValid = arrayBlock.getRawValueIsValid();
+
+        // The elements of all the arrays are appended at once, since every append to the element builder has a
+        // fixed cost, like deciding whether to borrow the buffers of the element block. Null arrays have no elements.
+        int elementCount = 0;
+        boolean contiguous = true;
+        int previousEnd = -1;
         for (int i = 0; i < length; i++) {
-            append(block, positions[offset + i]);
+            int position = positions[offset + i];
+            if (rawValueIsValid != null && !isSet(rawValueIsValid, rawOffsetBase, position)) {
+                continue;
+            }
+            int start = rawOffsets[rawOffsetBase + position];
+            int end = rawOffsets[rawOffsetBase + position + 1];
+            if (end > start) {
+                contiguous &= previousEnd < 0 || start == previousEnd;
+                previousEnd = end;
+                elementCount += end - start;
+            }
+        }
+        if (elementCount > 0) {
+            if (contiguous) {
+                values.appendBlockRange(arrayBlock.getRawElementBlock(), previousEnd - elementCount, elementCount);
+            }
+            else {
+                int[] elementPositions = new int[elementCount];
+                int index = 0;
+                for (int i = 0; i < length; i++) {
+                    int position = positions[offset + i];
+                    if (rawValueIsValid != null && !isSet(rawValueIsValid, rawOffsetBase, position)) {
+                        continue;
+                    }
+                    int end = rawOffsets[rawOffsetBase + position + 1];
+                    for (int element = rawOffsets[rawOffsetBase + position]; element < end; element++) {
+                        elementPositions[index] = element;
+                        index++;
+                    }
+                }
+                values.appendBlockPositions(arrayBlock.getRawElementBlock(), elementPositions, 0, elementCount);
+            }
+        }
+
+        for (int i = 0; i < length; i++) {
+            int position = positions[offset + i];
+            boolean isNull = rawValueIsValid != null && !isSet(rawValueIsValid, rawOffsetBase, position);
+            int entrySize = isNull ? 0 : rawOffsets[rawOffsetBase + position + 1] - rawOffsets[rawOffsetBase + position];
+            offsets[positionCount + i + 1] = offsets[positionCount + i] + entrySize;
+            if (isNull) {
+                initializeValidityForFirstNull();
+                clear(valueIsValid, 0, positionCount + i);
+            }
+            else if (valueIsValid != null) {
+                set(valueIsValid, 0, positionCount + i);
+            }
+            hasNullValue |= isNull;
+            hasNonNullValue |= !isNull;
+        }
+        positionCount += length;
+
+        if (blockBuilderStatus != null) {
+            blockBuilderStatus.addBytes(length * SIZE_IN_BYTES_PER_POSITION);
         }
     }
 

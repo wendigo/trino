@@ -69,6 +69,24 @@ public interface BlockBuilder
     }
 
     /**
+     * Appends the values of the block at the positions, which may be a dictionary or run-length encoded block.
+     */
+    default void appendBlockPositions(Block rawBlock, int[] positions, int offset, int length)
+    {
+        switch (rawBlock) {
+            case RunLengthEncodedBlock rleBlock -> appendRepeated(rleBlock.getValue(), 0, length);
+            case DictionaryBlock dictionaryBlock -> {
+                int[] ids = new int[length];
+                for (int i = 0; i < length; i++) {
+                    ids[i] = dictionaryBlock.getId(positions[offset + i]);
+                }
+                appendPositions(dictionaryBlock.getDictionary(), ids, 0, length);
+            }
+            case ValueBlock valueBlock -> appendPositions(valueBlock, positions, offset, length);
+        }
+    }
+
+    /**
      * Appends a null value to the block.
      */
     BlockBuilder appendNull();
