@@ -18,6 +18,7 @@ import io.trino.filesystem.TrinoInputFile;
 import io.trino.filesystem.local.LocalInputFile;
 import io.trino.parquet.BloomFilterStore;
 import io.trino.parquet.ParquetReaderOptions;
+import io.trino.parquet.SliceBloomFilter;
 import io.trino.parquet.metadata.ColumnChunkMetadata;
 import io.trino.parquet.metadata.ParquetMetadata;
 import io.trino.parquet.predicate.TupleDomainParquetPredicate;
@@ -32,7 +33,6 @@ import io.trino.spi.type.UuidType;
 import org.apache.hadoop.hive.serde2.objectinspector.ObjectInspector;
 import org.apache.hadoop.mapred.JobConf;
 import org.apache.parquet.column.ColumnDescriptor;
-import org.apache.parquet.column.values.bloomfilter.BloomFilter;
 import org.apache.parquet.format.CompressionCodec;
 import org.apache.parquet.schema.PrimitiveType;
 import org.apache.parquet.schema.Types;
@@ -161,7 +161,7 @@ public class TestBloomFilterStore
         try (ParquetTester.TempFile tempFile = new ParquetTester.TempFile("testbloomfilter", ".parquet")) {
             BloomFilterStore bloomFilterEnabled = generateBloomFilterStore(tempFile, true, typeTestCase.writeValues, typeTestCase.objectInspector);
             assertThat(bloomFilterEnabled.getBloomFilter(fromDotString(COLUMN_NAME))).isPresent();
-            BloomFilter bloomFilter = bloomFilterEnabled.getBloomFilter(fromDotString(COLUMN_NAME)).get();
+            SliceBloomFilter bloomFilter = new SliceBloomFilter(bloomFilterEnabled.getBloomFilter(fromDotString(COLUMN_NAME)).orElseThrow());
 
             for (Object data : typeTestCase.matchingValues) {
                 assertThat(TupleDomainParquetPredicate.checkInBloomFilter(bloomFilter, data, typeTestCase.sqlType)).isTrue();

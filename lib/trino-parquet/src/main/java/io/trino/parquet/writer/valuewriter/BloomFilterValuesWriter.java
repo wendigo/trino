@@ -15,11 +15,11 @@ package io.trino.parquet.writer.valuewriter;
 
 import com.google.common.annotations.VisibleForTesting;
 import io.airlift.slice.Slice;
+import io.trino.parquet.SliceBloomFilter;
 import org.apache.parquet.bytes.BytesInput;
 import org.apache.parquet.column.Encoding;
 import org.apache.parquet.column.page.DictionaryPage;
 import org.apache.parquet.column.values.bloomfilter.BloomFilter;
-import org.apache.parquet.io.api.Binary;
 
 import java.util.Optional;
 
@@ -27,7 +27,7 @@ public class BloomFilterValuesWriter
         extends ValuesWriter
 {
     private final ValuesWriter writer;
-    private final BloomFilter bloomFilter;
+    private final SliceBloomFilter bloomFilter;
 
     public static ValuesWriter createBloomFilterValuesWriter(ValuesWriter writer, Optional<BloomFilter> bloomFilter)
     {
@@ -40,7 +40,7 @@ public class BloomFilterValuesWriter
     private BloomFilterValuesWriter(ValuesWriter writer, BloomFilter bloomFilter)
     {
         this.writer = writer;
-        this.bloomFilter = bloomFilter;
+        this.bloomFilter = new SliceBloomFilter(bloomFilter);
     }
 
     @VisibleForTesting
@@ -125,14 +125,14 @@ public class BloomFilterValuesWriter
     public void writeBytes(Slice value)
     {
         writer.writeBytes(value);
-        bloomFilter.insertHash(bloomFilter.hash(Binary.fromReusedByteArray(value.byteArray(), value.byteArrayOffset(), value.length())));
+        bloomFilter.insertHash(bloomFilter.hash(value));
     }
 
     @Override
     public void writeBytes(Slice base, int offset, int length)
     {
         writer.writeBytes(base, offset, length);
-        bloomFilter.insertHash(bloomFilter.hash(Binary.fromReusedByteArray(base.byteArray(), base.byteArrayOffset() + offset, length)));
+        bloomFilter.insertHash(bloomFilter.hash(base, offset, length));
     }
 
     @Override
