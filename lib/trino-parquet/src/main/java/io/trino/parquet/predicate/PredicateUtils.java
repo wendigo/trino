@@ -141,6 +141,7 @@ public final class PredicateUtils
 
     private static boolean predicateMatches(
             TupleDomainParquetPredicate indexPredicate,
+            BloomFilterPredicate bloomFilterPredicate,
             List<ColumnDescriptor> candidateColumns,
             Map<ColumnDescriptor, Long> columnValueCounts,
             PrunedBlockMetadata columnsMetadata,
@@ -148,7 +149,6 @@ public final class PredicateUtils
             Map<List<String>, ColumnDescriptor> descriptorsByPath,
             Optional<ColumnIndexStore> columnIndexStore,
             Optional<BloomFilterStore> bloomFilterStore,
-            int domainCompactionThreshold,
             Optional<FileDecryptionContext> decryptionContext)
             throws IOException
     {
@@ -157,7 +157,7 @@ public final class PredicateUtils
             return false;
         }
 
-        if (bloomFilterStore.isPresent() && !indexPredicate.matches(bloomFilterStore.get(), domainCompactionThreshold)) {
+        if (bloomFilterStore.isPresent() && !bloomFilterPredicate.matches(bloomFilterStore.get(), candidateColumns)) {
             return false;
         }
 
@@ -184,6 +184,9 @@ public final class PredicateUtils
             ParquetReaderOptions options)
             throws IOException
     {
+        List<BloomFilterPredicate> bloomFilterPredicates = parquetTupleDomains.stream()
+                .map(predicate -> new BloomFilterPredicate(predicate, domainCompactionThreshold))
+                .toList();
         ImmutableList.Builder<RowGroupInfo> rowGroupInfoBuilder = ImmutableList.builder();
         for (BlockMetadata block : parquetMetadata.getBlocks(splitStart, splitLength)) {
             PrunedBlockMetadata columnsMetadata = createPrunedColumnsMetadata(block, dataSource.getId(), descriptorsByPath);
@@ -212,6 +215,7 @@ public final class PredicateUtils
                 Optional<BloomFilterStore> bloomFilterStore = getBloomFilterStore(dataSource, block, parquetTupleDomain, options, parquetMetadata.getDecryptionContext());
                 if (predicateMatches(
                         indexPredicate,
+                        bloomFilterPredicates.get(i),
                         candidateColumns.get(),
                         columnValueCounts,
                         columnsMetadata,
@@ -219,7 +223,6 @@ public final class PredicateUtils
                         descriptorsByPath,
                         columnIndex,
                         bloomFilterStore,
-                        domainCompactionThreshold,
                         parquetMetadata.getDecryptionContext())) {
                     rowGroupInfoBuilder.add(new RowGroupInfo(columnsMetadata, block.fileRowCountOffset(), columnIndex));
                     break;

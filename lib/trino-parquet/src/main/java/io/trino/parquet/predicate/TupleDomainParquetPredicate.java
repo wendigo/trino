@@ -37,12 +37,9 @@ import io.trino.spi.type.Decimals;
 import io.trino.spi.type.Int128;
 import io.trino.spi.type.TimestampType;
 import io.trino.spi.type.Type;
-import io.trino.spi.type.UuidType;
-import io.trino.spi.type.VarbinaryType;
 import io.trino.spi.type.VarcharType;
 import org.apache.parquet.column.ColumnDescriptor;
 import org.apache.parquet.column.statistics.Statistics;
-import org.apache.parquet.column.values.bloomfilter.BloomFilter;
 import org.apache.parquet.filter2.predicate.FilterApi;
 import org.apache.parquet.filter2.predicate.FilterPredicate;
 import org.apache.parquet.filter2.predicate.Operators;
@@ -61,7 +58,6 @@ import org.joda.time.DateTimeZone;
 import java.io.Serializable;
 import java.nio.ByteBuffer;
 import java.util.ArrayList;
-import java.util.Collection;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -86,10 +82,7 @@ import static io.trino.spi.type.RealType.REAL;
 import static io.trino.spi.type.SmallintType.SMALLINT;
 import static io.trino.spi.type.Timestamps.MILLISECONDS_PER_SECOND;
 import static io.trino.spi.type.TinyintType.TINYINT;
-import static io.trino.spi.type.TypeUtils.isFloatingPointNaN;
 import static java.lang.Float.floatToRawIntBits;
-import static java.lang.Float.intBitsToFloat;
-import static java.lang.Math.toIntExact;
 import static java.lang.String.format;
 import static java.nio.ByteOrder.LITTLE_ENDIAN;
 import static java.util.Objects.requireNonNull;
@@ -247,43 +240,7 @@ public class TupleDomainParquetPredicate
      */
     public boolean matches(BloomFilterStore bloomFilterStore, int domainCompactionThreshold)
     {
-        requireNonNull(bloomFilterStore, "bloomFilterStore is null");
-
-        if (effectivePredicate.isNone()) {
-            return false;
-        }
-        Map<ColumnDescriptor, Domain> effectivePredicateDomains = effectivePredicate.getDomains()
-                .orElseThrow(() -> new IllegalStateException("Effective predicate other than none should have domains"));
-
-        for (ColumnDescriptor column : columns) {
-            Domain effectivePredicateDomain = effectivePredicateDomains.get(column);
-
-            // the bloom filter bitset contains only non-null values so isn't helpful
-            if (effectivePredicateDomain == null || effectivePredicateDomain.isNullAllowed()) {
-                continue;
-            }
-
-            // NaN payloads may hash differently, so the bloom filter cannot eliminate this overlap.
-            if (effectivePredicateDomain.getValues() instanceof FloatingPointValueSet floatingPoint && floatingPoint.isNaNAllowed()) {
-                continue;
-            }
-
-            Optional<Collection<Object>> discreteValues = extractDiscreteValues(domainCompactionThreshold, effectivePredicateDomain.getValues());
-            // values are not discrete, so bloom filter isn't helpful
-            if (discreteValues.isEmpty()) {
-                continue;
-            }
-
-            Optional<BloomFilter> bloomFilterOptional = bloomFilterStore.getBloomFilter(ColumnPath.get(column.getPath()));
-            if (bloomFilterOptional.isEmpty()) {
-                continue;
-            }
-            SliceBloomFilter bloomFilter = new SliceBloomFilter(bloomFilterOptional.get());
-            if (discreteValues.get().stream().noneMatch(value -> checkInBloomFilter(bloomFilter, value, effectivePredicateDomain.getType()))) {
-                return false;
-            }
-        }
-        return true;
+        return new BloomFilterPredicate(effectivePredicate, domainCompactionThreshold).matches(bloomFilterStore, columns);
     }
 
     /**
@@ -733,38 +690,7 @@ public class TupleDomainParquetPredicate
     @VisibleForTesting
     public static boolean checkInBloomFilter(SliceBloomFilter bloomFilter, Object predicateValue, Type sqlType)
     {
-        // Different NaN payloads have the same Trino membership but may hash differently.
-        if (isFloatingPointNaN(sqlType, predicateValue)) {
-            return true;
-        }
-
-        // TODO: Support TIMESTAMP, CHAR and DECIMAL
-        if (sqlType == TINYINT || sqlType == SMALLINT || sqlType == INTEGER || sqlType == DATE) {
-            return bloomFilter.findHash(bloomFilter.hash(toIntExact(((Number) predicateValue).longValue())));
-        }
-        if (sqlType == BIGINT) {
-            return bloomFilter.findHash(bloomFilter.hash(((Number) predicateValue).longValue()));
-        }
-        else if (sqlType == DOUBLE) {
-            return bloomFilter.findHash(bloomFilter.hash(((Double) predicateValue).doubleValue()));
-        }
-        else if (sqlType == REAL) {
-            return bloomFilter.findHash(bloomFilter.hash(intBitsToFloat(toIntExact(((Number) predicateValue).longValue()))));
-        }
-        else if (sqlType instanceof VarcharType || sqlType instanceof VarbinaryType || sqlType instanceof UuidType) {
-            return bloomFilter.findHash(bloomFilter.hash((Slice) predicateValue));
-        }
-
-        return true;
-    }
-
-    private static Optional<Collection<Object>> extractDiscreteValues(int domainCompactionThreshold, ValueSet valueSet)
-    {
-        if (!valueSet.isDiscreteSet()) {
-            return valueSet.tryExpandRanges(domainCompactionThreshold);
-        }
-
-        return Optional.of(valueSet.getDiscreteSet());
+        return BloomFilterPredicate.checkInBloomFilter(bloomFilter, predicateValue, sqlType);
     }
 
     private FilterPredicate convertToParquetFilter(DateTimeZone timeZone)
