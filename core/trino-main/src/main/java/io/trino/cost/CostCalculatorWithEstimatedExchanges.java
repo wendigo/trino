@@ -26,6 +26,7 @@ import io.trino.sql.planner.plan.PlanNode;
 import io.trino.sql.planner.plan.PlanVisitor;
 import io.trino.sql.planner.plan.SemiJoinNode;
 import io.trino.sql.planner.plan.SpatialJoinNode;
+import io.trino.sql.planner.plan.TopNNode;
 import io.trino.sql.planner.plan.UnionNode;
 
 import java.util.Objects;
@@ -154,6 +155,17 @@ public class CostCalculatorWithEstimatedExchanges
                     stats,
                     node.getDistributionType() == SpatialJoinNode.DistributionType.REPLICATED,
                     taskCountEstimator.estimateSourceDistributedTaskCount(session));
+        }
+
+        @Override
+        public LocalCostEstimate visitTopN(TopNNode node, Void context)
+        {
+            if (node.getStep() == TopNNode.Step.PARTIAL) {
+                return LocalCostEstimate.zero();
+            }
+            // Assume distributed input until AddExchanges determines its actual distribution.
+            PlanNode source = node.getSource();
+            return calculateRemoteGatherCost(getStats(source).getOutputSizeInBytes(source.getOutputSymbols()));
         }
 
         @Override

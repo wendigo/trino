@@ -35,6 +35,7 @@ import io.trino.sql.planner.plan.RowNumberNode;
 import io.trino.sql.planner.plan.SemiJoinNode;
 import io.trino.sql.planner.plan.SpatialJoinNode;
 import io.trino.sql.planner.plan.TableScanNode;
+import io.trino.sql.planner.plan.TopNNode;
 import io.trino.sql.planner.plan.UnionNode;
 import io.trino.sql.planner.plan.ValuesNode;
 
@@ -54,7 +55,9 @@ import static io.trino.cost.CostCalculatorWithEstimatedExchanges.calculateRemote
 import static io.trino.cost.LocalCostEstimate.addPartialComponents;
 import static io.trino.sql.planner.plan.AggregationNode.Step.FINAL;
 import static io.trino.sql.planner.plan.AggregationNode.Step.SINGLE;
+import static java.lang.Math.log;
 import static java.lang.Math.max;
+import static java.lang.Math.min;
 import static java.util.Objects.requireNonNull;
 
 /**
@@ -283,6 +286,30 @@ public class CostCalculatorUsingExchanges
             // evaluated in context of actual source node type (and their sources).
             LocalCostEstimate localCost = LocalCostEstimate.ofCpu(getStats(node).getOutputSizeInBytes(node.getOutputSymbols()));
             return costForStreaming(node, localCost);
+        }
+
+        @Override
+        public PlanCostEstimate visitTopN(TopNNode node, Void context)
+        {
+            PlanNodeStatsEstimate input = getStats(node.getSource());
+            double inputRows = input.getOutputRowCount();
+            if (node.getCount() == 0 || inputRows == 0) {
+                return costForAccumulation(node, LocalCostEstimate.zero());
+            }
+
+            PlanNodeStatsEstimate output = getStats(node);
+            List<Symbol> keys = node.getOrderingScheme().orderBy();
+            double retainedBytes = output.getOutputSizeInBytes(node.getOutputSymbols());
+            double retainedRows = output.getOutputRowCount();
+            // Partial TopN retains up to count rows per driver. Its output stats include all drivers.
+            double heapDepth = log(max(1, min(node.getCount(), retainedRows))) / log(2);
+            // With randomly ordered keys, row i enters a full heap of size k with probability k/i.
+            // Summing over the input gives approximately k * ln(n/k) replacements per heap.
+            // Draining the heap in order requires another k removals.
+            double heapWork = output.getOutputSizeInBytes(keys) * heapDepth *
+                    (1 + log(max(1, inputRows / max(1, retainedRows))));
+            double cpuCost = input.getOutputSizeInBytes(keys) + heapWork + retainedBytes;
+            return costForAccumulation(node, LocalCostEstimate.of(cpuCost, retainedBytes, 0));
         }
 
         @Override
